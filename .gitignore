@@ -1,0 +1,5 @@
+./segment-anything
+./ejemplos_fibras
+./checkpoint
+*.pths
+*.jpg
