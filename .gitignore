@@ -1,5 +1,11 @@
-./segment-anything
-./ejemplos_fibras
-./checkpoint
-*.pths
-*.jpg
+
+segment-anything/
+ejemplos_fibras/
+checkpoints/
+*.pth
+*.png
+Fibras/
+masks_001_512/
+data/
+Fine_tuned_Detectron2/data
+models/
