@@ -9,3 +9,17 @@ masks_001_512/
 data/
 Fine_tuned_Detectron2/data
 models/
+Fine_tuned_SAM/Dataloaders
+Resources/
+Zero_shot_Detectron2/fibras_detectadas
+Zero_shot_Detectron2/fibras_low_res_all
+Zero_shot_SAM/feature_extractor
+Zero_shot_SAM/fibras_detectadas_b
+Zero_shot_SAM/fibras_detectadas_h
+Zero_shot_SAM/fibras_detectadas_h_orig
+Zero_shot_SAM/fibras_detectadas_h_orig_2
+Zero_shot_SAM/fibras_low_res
+Zero_shot_SAM/fibras_low_res_all
+Zero_shot_SAM/masks
+Zero_shot_SAM/masks_b
+Zero_shot_SAM/masks_h

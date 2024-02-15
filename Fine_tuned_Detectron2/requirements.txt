@@ -1,0 +1,7 @@
+torch
+detectron2
+gcc 
+g++
+ninja
+fvcore
+sklear
