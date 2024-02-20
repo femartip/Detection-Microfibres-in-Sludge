@@ -33,11 +33,15 @@ from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
 
 logger = logging.getLogger("detectron2")
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda:1" if torch.cuda.is_available() else "cpu"
 #DEVICE = "cpu" 
 seed = 42
 torch.manual_seed(seed)
 NUM_FOLDS = 5
+RESULTS_FILE = open("./Fine_tuned_Detectron2/models/results.txt", "a")
+TOTAL_RESULTS = []
+
+
 
 #https://github.com/cleanlab/examples/blob/f85155bb4e5d5643f878a2ccaa9363a1896619ce/object_detection/detectron2_training-kfold.ipynb#L45
 def split_data(train_indices, test_indices, image_ids, image_data, data):
@@ -93,6 +97,26 @@ def k_fold_data(image_ids, category_ids, image_data, data):
     
     return pairs    
 
+def print_results(results, model_name):
+    print(f"Fold {model_name} results: {results}")
+    global TOTAL_RESULTS
+    global RESULTS_FILE
+    RESULTS_FILE.write(f"Fold {model_name} results: {results}\n")
+    TOTAL_RESULTS.append(results)
+
+def mean_results():
+    mean_total_results = {"bbox": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0}, "segm": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0}}
+    global RESULTS_FILE
+    for dict in TOTAL_RESULTS:
+        for key in dict:
+            for j in dict[key]:
+                mean_total_results[key][j] += dict[key][j]
+    for key in mean_total_results:
+        for j in mean_total_results[key]:
+            mean_total_results[key][j] = mean_total_results[key][j] / NUM_FOLDS
+    print(mean_total_results)
+    RESULTS_FILE.write(f"Mean performance of {NUM_FOLDS} folds: {mean_total_results}\n")
+
 def get_evaluator(cfg, dataset_name, output_folder=None):
     """
     Create evaluator(s) for a given dataset.
@@ -114,7 +138,7 @@ def get_evaluator(cfg, dataset_name, output_folder=None):
     return evaluator
 
 
-def do_test(cfg, model):
+def do_test(cfg, model, storage):
     results = OrderedDict()
     for dataset_name in cfg.DATASETS.TEST:
         #print(type(dataset_name))
@@ -131,18 +155,18 @@ def do_test(cfg, model):
             logger.info("Evaluation results for {} in csv format:".format(dataset_name))
             print("Evaluation results for {} in csv format:".format(dataset_name))
             print_csv_format(results_i)
-            #storage.put_scalar('bbox/AP', results_i['bbox']['AP'])
-            #storage.put_scalar('segm/AP', results_i['segm']['AP'])
-            #storage.put_scalar('bbox/AP50', results_i['bbox']['AP50'])
-            #storage.put_scalar('segm/AP50', results_i['segm']['AP50'])
-            #storage.put_scalar('bbox/AP75', results_i['bbox']['AP75'])
-            #storage.put_scalar('segm/AP75', results_i['segm']['AP75'])
-            #storage.put_scalar('bbox/APs', results_i['bbox']['APs'])
-            #storage.put_scalar('segm/APs', results_i['segm']['APs'])
-            #storage.put_scalar('bbox/APm', results_i['bbox']['APm'])
-            #storage.put_scalar('segm/APm', results_i['segm']['APm'])
-            #storage.put_scalar('bbox/APl', results_i['bbox']['APl'])
-            #storage.put_scalar('segm/APl', results_i['segm']['APl'])
+            storage.put_scalar('bbox/AP', results_i['bbox']['AP'])
+            storage.put_scalar('segm/AP', results_i['segm']['AP'])
+            storage.put_scalar('bbox/AP50', results_i['bbox']['AP50'])
+            storage.put_scalar('segm/AP50', results_i['segm']['AP50'])
+            storage.put_scalar('bbox/AP75', results_i['bbox']['AP75'])
+            storage.put_scalar('segm/AP75', results_i['segm']['AP75'])
+            storage.put_scalar('bbox/APs', results_i['bbox']['APs'])
+            storage.put_scalar('segm/APs', results_i['segm']['APs'])
+            storage.put_scalar('bbox/APm', results_i['bbox']['APm'])
+            storage.put_scalar('segm/APm', results_i['segm']['APm'])
+            storage.put_scalar('bbox/APl', results_i['bbox']['APl'])
+            storage.put_scalar('segm/APl', results_i['segm']['APl'])
             
     if len(results) == 1:
         results = list(results.values())[0]
@@ -219,7 +243,6 @@ def do_train(cfg, model, resume,model_name):
             print("Iteration {}: {}".format(iteration, losses))
             #Every test period evaluate the model
             
-            """
             if (
                 cfg.TEST.EVAL_PERIOD > 0
                 and (iteration + 1) % cfg.TEST.EVAL_PERIOD == 0
@@ -227,7 +250,7 @@ def do_train(cfg, model, resume,model_name):
             ):
                 do_test(cfg, model, storage) #Test model
                 # Compared to "train_net.py", the test results are not dumped to EventStorage
-            """
+
             #Evaluation every 20 iterations
             if iteration - start_iter > 5 and (
                 (iteration + 1) % 20 == 0 or iteration == max_iter - 1
@@ -244,6 +267,8 @@ def do_train(cfg, model, resume,model_name):
             "Total training time: {}".format(str(datetime.timedelta(seconds=int(total_time)))))
         #Save model
         checkpointer.save("model_final" + model_name)  
+        results = do_test(cfg, model, storage)    #Test model
+        print_results(results, model_name)    #Print results
 
 
 def setup(pairs,k):
@@ -264,7 +289,7 @@ def setup(pairs,k):
     cfg.TEST.EVAL_PERIOD = 50
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = 2
     cfg.DATALOADER.NUM_WORKERS = 0
-    cfg.SOLVER.MAX_ITER = 1000    # iterations to train for
+    cfg.SOLVER.MAX_ITER = 5000    # iterations to train for
     cfg.SOLVER.STEPS = []        # do not decay learning rate
     return cfg
 
@@ -283,77 +308,43 @@ def main():
 
     pairs = k_fold_data(image_ids, category_ids, image_data, data) #Split data into k folds
     
-    results_file = open("./Fine_tuned_Detectron2/models/results.txt", "a")
-
-    batch_size = [3]
+    #batch_size = [2,4,6,8,10]
     lrates = [0.001]
-    batch_size_per_image = [128,256,512]
-    #batch_size = [1,2,3]
+    batch_size_per_image = [128]
+    batch_size = [10]
     #lrates = [0.001,0.0001,0.00001]
-    #batch_size_per_image = [128,256,512]
+    #batch_size_per_image = [64,128,256,512]
 
     cfg = setup(pairs, NUM_FOLDS)
-    max_result = {"bbox": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0}, "segm": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0}}
+    max_result = {"bbox": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0 }, "segm": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0}}
     max_result_n = 0
-    count = 18
+    count = 0
+    global RESULTS_FILE
     
     for bs in batch_size:
         for lr in lrates:
             for bsi in batch_size_per_image:
-                total_results = []
                 cfg.SOLVER.IMS_PER_BATCH = bs
                 cfg.SOLVER.BASE_LR = lr
                 cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = bsi
                 print(f"Batch size: {bs}, Learning rate: {lr}, Batch size per image: {bsi}")
-                results_file.write(str(count) + "\n")
-                results_file.write("---------------------------------------------------------------------\n")
-                results_file.write(f"Batch size: {bs}, Learning rate: {lr}, Batch size per image: {bsi}\n")
+                RESULTS_FILE.write(str(count) + "\n")
+                RESULTS_FILE.write("---------------------------------------------------------------------\n")
+                RESULTS_FILE.write(f"Batch size: {bs}, Learning rate: {lr}, Batch size per image: {bsi}\n")
                 for k in range(0, NUM_FOLDS):
                     cfg.DATASETS.TRAIN = ("train_" + str(k),)
                     cfg.DATASETS.TEST = ("validation_" + str(k),)
                     model = build_model(cfg)    #Build model
                     model.to(DEVICE)
                     do_train(cfg, model, False, str(count) + "_" + str(k))    #Train model
-                    results = do_test(cfg, model)    #Test model
-                    print(f"Fold {k} results: {results}")
-                    results_file.write(f"Fold {k} results: {results}\n")
-                    total_results.append(results)
                     config_yaml_path = "./Fine_tuned_Detectron2/models/config"+str(count) + "_" + str(k)+".yaml"
                     with open(config_yaml_path, 'w') as file:
                         yaml.dump(cfg, file)
-                
-                mean_total_results = {"bbox": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0}, "segm": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0}}
-                for dict in total_results:
-                    for key in dict:
-                        for j in dict[key]:
-                            mean_total_results[key][j] += dict[key][j]
-                for key in mean_total_results:
-                    for j in mean_total_results[key]:
-                        mean_total_results[key][j] = mean_total_results[key][j] / NUM_FOLDS
-                print(mean_total_results)
-                if mean_total_results["bbox"]["AP"] > max_result["bbox"]["AP"] and mean_total_results["bbox"]["AP"] > max_result["bbox"]["AP"]:
-                    max_result = mean_total_results
-                    max_result_n = count
-                results_file.write(f"Mean performance of {NUM_FOLDS} folds: {mean_total_results} \n")
+                mean_results()
+                global TOTAL_RESULTS
+                TOTAL_RESULTS = []
                 count += 1
-    results_file.write(f"Best results {max_result_n} with {mean_total_results}")
-    results_file.close()
-
-"""
-    for k in range(0, NUM_FOLDS):
-        #result_dict = {}
-        train_data = pairs[k][0].name
-        val_data = pairs[k][1].name
-        if not trained_model:
-            cfg = setup(train_data, val_data,k) #Create config file
-        elif trained_model:
-            cfg = setup(cfg, train_data, val_data,k)
-        model = build_model(cfg)    #Build model
-        model.to(DEVICE)
-        do_train(cfg, model, trained_model)    #Train model
-        if not trained_model:
-            trained_model = True
-"""
+    RESULTS_FILE.close()
         
 
 if __name__ == "__main__":

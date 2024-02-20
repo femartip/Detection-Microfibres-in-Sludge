@@ -103,9 +103,11 @@ def mask_size(mask):
     cv2.imwrite("./Fine_tuned_Detectron2/data/skeleton/{}_{}.jpg".format(j,i), skel)
     return skeleton, distance
 
+model_path = "49_final"
+
 cfg = get_cfg()
-cfg.merge_from_file("./Fine_tuned_Detectron2/models/config.yaml")
-cfg.MODEL.WEIGHTS = os.path.join("./Fine_tuned_Detectron2/models/model_final.pth")
+cfg.merge_from_file("./Fine_tuned_Detectron2/models/{}/config.yaml".format(model_path))
+cfg.MODEL.WEIGHTS = os.path.join("./Fine_tuned_Detectron2/models/{}/model_final.pth".format(model_path))
 cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -114,9 +116,13 @@ model = build_model(cfg)
 model.to(DEVICE)
 DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
 
-for j in range(930,1660):
+files = os.listdir('./Fine_tuned_Detectron2/data/inference')
+files = [file.split('.')[0] for file in files]
+
+for j in files:
     model.eval()
-    img = cv2.imread("./data/Dataset/images/{}.jpg".format(j))  #BGR image
+    img = cv2.imread("./Fine_tuned_Detectron2/data/inference/{}.jpg".format(j))  #BGR image
+    img = cv2.resize(img, (1000, 750))
     """
     print(img.shape)
     image = torch.tensor(img).permute(2, 0, 1).float()
@@ -136,7 +142,7 @@ for j in range(930,1660):
     mask_features = model.roi_heads.mask_pooler(mask_features, [x.proposal_boxes for x in instances])
     print(mask_features)
     """
-    copy_img = img
+    
     
     with torch.no_grad():
         inputs = {"image": torch.tensor(img).permute(2, 0, 1).float()}
@@ -144,7 +150,7 @@ for j in range(930,1660):
     #print(outputs)
 
     pred_masks = outputs[0]["instances"].pred_masks.cpu().numpy()
-    print(pred_masks)
+    #print(pred_masks)
     pred_boxes = outputs[0]["instances"].pred_boxes.tensor.cpu().numpy()
 
     if len(pred_masks) == 0:
@@ -176,10 +182,9 @@ for j in range(930,1660):
         joined_masks = joined_masks + mask_grey
 
     #out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-    break
     cv2.imwrite("./Fine_tuned_Detectron2/data/masks/{}.jpg".format(j), joined_masks)
-    cv2.imwrite("./Fine_tuned_Detectron2/data/predictions_prueba/{}.jpg".format(j), img)
+    cv2.imwrite("./Fine_tuned_Detectron2/data/predictions/{}.jpg".format(j), img)
     #cv2.imwrite("./Fine_tuned_Detectron2/data/predictions/{}.jpg".format(j), out.get_image()[:, :, ::-1])
     #cv2.imshow("Image", out.get_image()[:, :, ::-1])
-    
+print("Done")
     
