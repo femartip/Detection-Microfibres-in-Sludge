@@ -19,8 +19,8 @@ coco_format['info'] = {
     "date_created": "12/11/23"
 }
 
-image_dir = './Fine_tuned_Detectron2/data/Dataset/images'
-mask_dir = './Fine_tuned_Detectron2/data/Dataset/masks'
+image_dir = './Fine_tuned_Detectron2/data/Dataset/Dataset_CA/images'
+mask_dir = './Fine_tuned_Detectron2/data/Dataset/Dataset_CA/masks'
 
 
 image_id = 1
@@ -44,9 +44,9 @@ for filename in os.listdir(image_dir):
             "date_captured": "2023-01-01"
         })
         #If image present in folder ./Fine_tuned_Detectron2/data/Dataset/light
-        if os.path.exists(os.path.join('./Fine_tuned_Detectron2/data/Dataset/light', filename)):
+        if os.path.exists(os.path.join('./Fine_tuned_Detectron2/data/Dataset/Dataset_CA/light', filename)):
             cat_id = 2
-        elif os.path.exists(os.path.join('./Fine_tuned_Detectron2/data/Dataset/dark', filename)):
+        elif os.path.exists(os.path.join('./Fine_tuned_Detectron2/data/Dataset/Dataset_CA/dark', filename)):
             cat_id = 1
         else:
             print("Image has no category.")
@@ -89,4 +89,4 @@ for filename in os.listdir(image_dir):
 with open('./Fine_tuned_Detectron2/data/coco_format.json', 'w') as f:
     json.dump(coco_format, f)
 
-
+print("COCO format file created successfully.")

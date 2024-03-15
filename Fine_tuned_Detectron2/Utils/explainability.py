@@ -24,11 +24,11 @@ Got the idea form https://medium.com/@hirotoschwert/digging-into-detectron-2-par
 """
 
 # This is the path to the models files, it should contain the config.yaml and model_final.pth
-MODEL_PATH = "./Fine_tuned_Detectron2/models/49_final/"
+MODEL_PATH = "./Fine_tuned_Detectron2/models/Fast_RCNN_R50/49_final/"
 # This is the path to the images we want to analyze
-FILES_PATH = "./Fine_tuned_Detectron2/data/inference/"
+FILES_PATH = "./Fine_tuned_Detectron2/data/Filtro_vidrio/inference/"
 # This is the path where the images will be saved
-OUTPUT_FOLDER = "./Fine_tuned_Detectron2/data/test/"
+OUTPUT_FOLDER = "./Fine_tuned_Detectron2/data/Filtro_vidrio/"
 # This is set to resize the images
 RESIZE = (1000, 750)
 
@@ -88,11 +88,21 @@ class MyGeneralizedRCNN(GeneralizedRCNN):
     def save_features_as_images(features):
         import numpy as np
         import cv2
-        for k, v in features.items():
+        #axis, fig = plt.subplots(2, 3, figsize=(20, 4))
+        for i,(k, v) in enumerate(features.items()):
             v_ = v[:, 0].cpu().numpy()
             v_ = (v_ / 16 + 0.5) * 255
             v_ = np.asarray(v_.clip(0, 255), dtype=np.uint8).transpose((1, 2, 0))
             cv2.imwrite(OUTPUT_FOLDER +'heatmap_FPN/' + k + '.png', v_)
+            plt.imshow(v_)
+            plt.title("Feature map of {}".format(k))
+            plt.axis('off')
+            plt.savefig(OUTPUT_FOLDER + 'heatmap_FPN/heatmap_{}.png'.format(k))
+            #fig[i%2][i%3].imshow(v_)
+            #fig[i%2][i%3].set_title(k)
+            #fig[i%2][i%3].axis('off')
+        #plt.savefig(OUTPUT_FOLDER + 'heatmap_FPN/heatmap.png')
+        #plt.close()
 
 @RPN_HEAD_REGISTRY.register()
 class MyRPNHead(StandardRPNHead):
@@ -202,7 +212,9 @@ def get_heatmap_fpn(file):
     
     for i in range(2,7):
         os.rename(output_folder + '/p{}.png'.format(i), output_folder + '/{}_p{}.png'.format(file, i))
+        os.rename(output_folder + '/heatmap_p{}.png'.format(i), output_folder + '/heatmap_{}_p{}.png'.format(file,i))
     
+    #os.rename(output_folder + '/heatmap.png', output_folder + '/{}.png'.format(file))
     print("FPN heatmap of image {} saved in {}".format(file,output_folder))
 
 # This function is used to get for each prediction in the image the heatmap of the mask and the original image with the bounding box included
@@ -226,19 +238,21 @@ def get_heatmap_mask(file):
         return
     pred_boxes = outputs[0].get_fields()['pred_boxes'].tensor.cpu().numpy()
     
-    pred_masks = pred_masks.squeeze(1)
+    pred_masks = pred_masks.squeeze(1)  # Resulting shape 28,28 in all, this is not the original shape of the mask
     
     #Show the original image to the left and the heatmap to the right
     for i in range(pred_masks.shape[0]):
+        pred_mask = pred_masks[i].copy()
         x1,y1,x2,y2 = pred_boxes[i]
         x1,y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        orig_shape_pred_mask = cv2.resize(pred_mask, (x2-x1,y2-y1))  # Reshape the mask to the original shape, cv2 reescales the image to the new shape
         copy_img = img.copy()
         cv2.rectangle(copy_img, (x1,y1), (x2,y2), (0,255,0), 2)
         fig = plt.figure(figsize=(16, 7))
         fig.add_subplot(1, 2, 1)
         plt.imshow(copy_img)
         fig.add_subplot(1, 2, 2)
-        plt.imshow(pred_masks[i] , cmap='hot', interpolation='nearest')
+        plt.imshow(orig_shape_pred_mask , cmap='hot', interpolation='nearest')
         plt.colorbar()
         plt.title("Heatmap of image {}".format(file))
         plt.savefig(output_folder + "/{}_{}.png".format(file,i))
@@ -249,6 +263,10 @@ def get_heatmap_mask(file):
 def main():
     files = os.listdir(FILES_PATH)
     files = [file.split('.')[0] for file in files]
+    #Make sure the folders exist
+    os.makedirs(OUTPUT_FOLDER + "heatmap_mask", exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER + "heatmap_FPN", exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER + "heatmap_ROI", exist_ok=True)
     for file in files:
         get_heatmap_mask(file)
         get_heatmap_fpn(file)
