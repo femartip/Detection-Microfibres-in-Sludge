@@ -243,4 +243,5 @@ if __name__ == "__main__":
 
 """
 python3 ./Fine_tuned_Detectron2/Utils/export_model.py --format torchscript --export-method tracing --config-file ./Fine_tuned_Detectron2/models/train1238_7/config.yaml --sample-image ./data/Dataset/images/0.jpg --output ./models --run-eval  MODEL.WEIGHTS ./Fine_tuned_Detectron2/models/train1238_7/model_final.pth MODEL.DEVICE cpu
+python3 ./Fine_tuned_Detectron2/Utils/export_model.py --format torchscript --export-method tracing --config-file ./Fine_tuned_Detectron2/models/CA_models/50_final/config.yaml --sample-image ./Fine_tuned_Detectron2/data/Dataset/Dataset_CA/images/0.jpg --output ./models MODEL.WEIGHTS ./Fine_tuned_Detectron2/models/CA_models/50_final/model_final.pth MODEL.DEVICE cpu
 """
