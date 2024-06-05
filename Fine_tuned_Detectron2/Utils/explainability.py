@@ -24,13 +24,15 @@ Got the idea form https://medium.com/@hirotoschwert/digging-into-detectron-2-par
 """
 
 # This is the path to the models files, it should contain the config.yaml and model_final.pth
-MODEL_PATH = "./Fine_tuned_Detectron2/models/CA_models/50_final/"
+#MODEL_PATH = "./Fine_tuned_Detectron2/models/CA_models/50_final/"
+MODEL_PATH = "./Fine_tuned_Detectron2/models/Glass_models/49_final/"
 # This is the path to the images we want to analyze
-FILES_PATH = "./Fine_tuned_Detectron2/data/Filtro_ca/Corriente_concentrada/Filtro_1/Muestra_1"
+FILES_PATH = "./Fine_tuned_Detectron2/data/Evaluation/detectadas/vidrio/"
 # This is the path where the images will be saved
-OUTPUT_FOLDER = "./Fine_tuned_Detectron2/data/Filtro_CA/"
+OUTPUT_FOLDER = "./Fine_tuned_Detectron2/data/Evaluation/detectadas/vidrio/"
 # This is set to resize the images
-RESIZE = (1280, 720)
+#RESIZE = (1280, 720)
+RESIZE = (1000, 750)
 
 ####################################################################
 # This is the code that needs to be added to the detectron2 library
