@@ -9,7 +9,6 @@ masks_001_512/
 data/
 Fine_tuned_Detectron2/data
 models/
-Fine_tuned_SAM/Dataloaders
 Resources/
 Zero_shot_Detectron2/fibras_detectadas
 Zero_shot_Detectron2/fibras_low_res_all
