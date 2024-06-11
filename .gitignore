@@ -4,7 +4,8 @@ checkpoints/
 *.pth
 Fibras/
 masks_001_512/
-data/
+data/raw/
+data/tiff_images/
 Fine_tuned_Detectron2/data/Dataset/Dataset_CA/dark/
 Fine_tuned_Detectron2/data/Dataset/Dataset_CA/light/
 Fine_tuned_Detectron2/data/Dataset/Dataset_vidrio/dark/
