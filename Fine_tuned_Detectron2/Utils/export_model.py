@@ -107,7 +107,7 @@ def export_scripting(torch_model):
 
 
 # experimental. API not yet final
-def export_tracing(torch_model, inputs):
+def export_tracing(torch_model, inputs, device="cpu"):
     assert TORCH_VERSION >= (1, 8)
     image = inputs[0]["image"]
     inputs = [{"image": image}]  # remove other unused keys
@@ -125,6 +125,8 @@ def export_tracing(torch_model, inputs):
     traceable_model = TracingAdapter(torch_model, inputs, inference)
 
     if args.format == "torchscript":
+        traceable_model = traceable_model.to(device)
+        image = image.to(device)
         ts_model = torch.jit.trace(traceable_model, (image,))
         with PathManager.open(os.path.join(args.output, "model.ts"), "wb") as f:
             torch.jit.save(ts_model, f)
@@ -202,6 +204,7 @@ if __name__ == "__main__":
         default=None,
         nargs=argparse.REMAINDER,
     )
+    parser.add_argument("--gpu", action="store_true", help="Save model for GPU deployment")
     args = parser.parse_args()
     logger = setup_logger()
     logger.info("Command line arguments: " + str(args))
@@ -222,6 +225,9 @@ if __name__ == "__main__":
         exported_model = export_caffe2_tracing(cfg, torch_model, sample_inputs)
     elif args.export_method == "scripting":
         exported_model = export_scripting(torch_model)
+    elif args.export_method == "tracing" and args.gpu:
+        sample_inputs = get_sample_inputs(args)
+        exported_model = export_tracing(torch_model, sample_inputs, device="cuda")
     elif args.export_method == "tracing":
         sample_inputs = get_sample_inputs(args)
         exported_model = export_tracing(torch_model, sample_inputs)
@@ -242,6 +248,6 @@ if __name__ == "__main__":
     logger.info("Success.")
 
 """
-python3 ./Fine_tuned_Detectron2/Utils/export_model.py --format torchscript --export-method tracing --config-file ./Fine_tuned_Detectron2/models/train1238_7/config.yaml --sample-image ./data/Dataset/images/0.jpg --output ./models --run-eval  MODEL.WEIGHTS ./Fine_tuned_Detectron2/models/train1238_7/model_final.pth MODEL.DEVICE cpu
+python3 ./Fine_tuned_Detectron2/Utils/export_model.py --format torchscript --export-method tracing --config-file ./Fine_tuned_Detectron2/models/Glass_models/49_final/config.yaml --sample-image ./data/Dataset_vidrio/images/0.jpg --output ./models  MODEL.WEIGHTS ./Fine_tuned_Detectron2/models/Glass_models/49_final//model_final.pth MODEL.DEVICE cpu
 python3 ./Fine_tuned_Detectron2/Utils/export_model.py --format torchscript --export-method tracing --config-file ./Fine_tuned_Detectron2/models/CA_models/50_final/config.yaml --sample-image ./Fine_tuned_Detectron2/data/Dataset/Dataset_CA/images/0.jpg --output ./models MODEL.WEIGHTS ./Fine_tuned_Detectron2/models/CA_models/50_final/model_final.pth MODEL.DEVICE cpu
 """
