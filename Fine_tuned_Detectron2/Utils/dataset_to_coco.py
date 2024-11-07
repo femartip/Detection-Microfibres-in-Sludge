@@ -19,15 +19,18 @@ coco_format['info'] = {
     "date_created": "12/11/23"
 }
 
-image_dir = './Fine_tuned_Detectron2/data/Dataset/Dataset_CA/images'
-mask_dir = './Fine_tuned_Detectron2/data/Dataset/Dataset_CA/masks'
+dataset_name = "vidrio"
 
+image_dir = f'./Fine_tuned_Detectron2/data/Dataset/Dataset_{dataset_name}/images'
+mask_dir = f'./Fine_tuned_Detectron2/data/Dataset/Dataset_{dataset_name}/masks'
 
 image_id = 1
 annotation_id = 1
 
-coco_format['categories'] = [{"id": 1, "name": "dark", "supercategory": "fibre"},
-                             {"id": 2, "name": "light", "supercategory": "fibre"}]
+coco_format['categories'] = [
+    {"id": 1, "name": "dark", "supercategory": "fibre"},
+    {"id": 2, "name": "light", "supercategory": "fibre"}
+]
 
 for filename in os.listdir(image_dir):
     if filename.endswith('.jpg'):
@@ -43,50 +46,60 @@ for filename in os.listdir(image_dir):
             "license": 1,
             "date_captured": "2023-01-01"
         })
-        #If image present in folder ./Fine_tuned_Detectron2/data/Dataset/light
-        if os.path.exists(os.path.join('./Fine_tuned_Detectron2/data/Dataset/Dataset_CA/light', filename)):
+
+        # Determine category ID based on folder presence
+        if os.path.exists(os.path.join(f'./Fine_tuned_Detectron2/data/Dataset/Dataset_{dataset_name}/light', filename)):
             cat_id = 2
-        elif os.path.exists(os.path.join('./Fine_tuned_Detectron2/data/Dataset/Dataset_CA/dark', filename)):
+        elif os.path.exists(os.path.join(f'./Fine_tuned_Detectron2/data/Dataset/Dataset_{dataset_name}/dark', filename)):
             cat_id = 1
         else:
             print("Image has no category.")
+            continue  # Skip images without a category
 
         # Open corresponding mask file
         mask_filename = filename.replace('.jpg', '.json')
-        with open(os.path.join(mask_dir, mask_filename)) as f:
-            mask = json.load(f)
-
-        if len(mask[0]["rectMask"]) == 0:
+        mask_path = os.path.join(mask_dir, mask_filename)
+        
+        if not os.path.exists(mask_path):
+            print(f"Mask file not found for image {filename}")
             continue
 
-        #print(mask[0]["rectMask"])
-        x,y,w,h = mask[0]["rectMask"].values()
-        bbox = [x,y,w,h]
+        with open(mask_path) as f:
+            mask = json.load(f)
 
-        seg_mask_points = []
-        for mask_points in mask[0]["content"]:
-            points = list(mask_points.values())
-            x,y = points[0], points[1]
-            seg_mask_points.append(x)
-            seg_mask_points.append(y)
+        # Process each object in the mask file
+        for obj in mask:
+            if len(obj["rectMask"]) == 0:
+                continue
+            
+            x, y, w, h = obj["rectMask"].values()
+            bbox = [x, y, w, h]
 
-        coco_format['annotations'].append({
-            "id": annotation_id,
-            "image_id": image_id,
-            "category_id": cat_id,
-            "bbox": bbox,
-            "area": w*h,
-            "bbox_mode": 1,             #XYWH_ABS
-            "segmentation": [seg_mask_points],
-            "iscrowd": 0
-        })
+            # Prepare segmentation points
+            seg_mask_points = []
+            for mask_points in obj["content"]:
+                points = list(mask_points.values())
+                x, y = points[0], points[1]
+                seg_mask_points.extend([x, y])
+
+            # Append annotation for each object
+            coco_format['annotations'].append({
+                "id": annotation_id,
+                "image_id": image_id,
+                "category_id": cat_id,
+                "bbox": bbox,
+                "area": w * h,
+                "bbox_mode": 1,  # XYWH_ABS
+                "segmentation": [seg_mask_points],
+                "iscrowd": 0
+            })
+            annotation_id += 1
 
         image_id += 1
-        annotation_id += 1
 
-#print(coco_format)
-
-with open('./Fine_tuned_Detectron2/data/coco_format.json', 'w') as f:
+# Save the COCO-format JSON
+output_path = f'./Fine_tuned_Detectron2/data/Dataset/Dataset_{dataset_name}/coco_format.json'
+with open(output_path, 'w') as f:
     json.dump(coco_format, f)
 
-print("COCO format file created successfully.")
+print("COCO format file created successfully at", output_path)
