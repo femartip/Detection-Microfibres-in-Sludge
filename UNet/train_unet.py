@@ -10,8 +10,10 @@ import cv2
 import numpy as np
 from sklearn.metrics import average_precision_score
 from unet import UNet
+from pycocotools.coco import COCO
+import psutil
 
-from SegmentationDataset import get_k_fold_datasets
+from SegmentationDataset import get_k_fold_dataset, SegmentationDataset
 
 SEED = 42
 
@@ -65,7 +67,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
-    batch_size = 32
+    batch_size = 8
     learning_rate = 0.0001
     val_percent = 0.1
     save_checkpoint = False
@@ -88,26 +90,25 @@ def train_model(model,device, train_dataset, val_dataset):
     global_step = 0
     epoch_loss = 0
     
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
     for epoch in range(epochs):
         model.train()
+        model.to(device=device)
         epoch_loss = 0
         epoch_acc = 0
         num_batches = 0
 
         for idx, batch in enumerate(train_loader):
             images, true_masks = batch
-            #images = images.clone().detach().float()
             images = images.to(device=device)
-            #true_masks = true_masks.clone().detach().float()
             true_masks = true_masks.to(device=device)
-            
-            masks_pred = model(images)
-            
+
             with torch.cuda.amp.autocast(enabled=amp):
+                masks_pred = model.forward(images)
                 loss = criterion(masks_pred.squeeze(1), true_masks)
+                #loss = loss.detach()
 
             optimizer.zero_grad(set_to_none=True)
             grad_scaler.scale(loss).backward()
@@ -140,15 +141,19 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cpu')
     if device.type == 'cuda':
+        torch.cuda.empty_cache()
         logging.info(f'Using {torch.cuda.get_device_name(0)}')
 
-    model = UNet(n_channels=3, n_classes=1, bilinear=True)
-    model.to(device=device)
+    model = UNet(n_channels=3, n_classes=1, bilinear=False)
+    
     data_dir = "./Fine_tuned_Detectron2/data/Dataset/Dataset_vidrio"
-    dataset = get_k_fold_datasets(data_dir, NUM_FOLDS, seed=SEED)
+    dataset_ids = get_k_fold_dataset(data_dir, NUM_FOLDS, seed=SEED)
 
     results = {}
 
-    for fold, (train_dataset, val_dataset) in enumerate(dataset):
+    for fold, (train_ids, val_ids) in enumerate(dataset_ids):
+        print("Segmentation fold: ", fold)
+        train_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"), train_ids)
+        val_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"), val_ids)
         train_model(model, device, train_dataset, val_dataset)
         
