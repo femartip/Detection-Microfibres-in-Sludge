@@ -7,6 +7,7 @@ import time
 import datetime
 from sklearn.model_selection import StratifiedKFold
 import yaml
+import argparse
 
 from fvcore.common.timer import Timer
 
@@ -77,14 +78,14 @@ def print_data_info(data_dict, fold):
     annotations_count = len(data_dict['annotations'])
     print(f"Number of images: {images_count}, Number of annotations: {annotations_count}")
 
-def k_fold_data(image_ids, category_ids, image_data, data):
+def k_fold_data(image_ids, category_ids, image_data, data, dir_path):
     skf = StratifiedKFold(n_splits=NUM_FOLDS, shuffle=True, random_state=seed)
     pairs = []
     for fold, (train_indices, test_indices) in enumerate(skf.split(image_ids, category_ids)):
         print(f"Fold {fold} has {len(train_indices)} training data and {len(test_indices)} testing data")
         train_data, test_data = split_data(train_indices, test_indices, image_ids, image_data, data)
-        train_file = f"./Fine_tuned_Detectron2/data/train_coco_{fold}_fold.json"
-        test_file = f"./Fine_tuned_Detectron2/data/test_coco_{fold}_fold.json"
+        train_file = os.path.join(dir_path, f"train_coco_{fold}_fold.json")
+        test_file = os.path.join(dir_path, f"test_coco_{fold}_fold.json")
         with open(train_file, 'w') as train_file:
             json.dump(train_data, train_file)
         with open(test_file, 'w') as test_file:
@@ -271,7 +272,7 @@ def do_train(cfg, model, resume,model_name):
         print_results(results, model_name)    #Print results
 
 
-def setup(pairs,k):
+def setup(pairs,k, dir_path):
     #Create config file
     cfg = get_cfg()
     train_dataset = []
@@ -279,8 +280,8 @@ def setup(pairs,k):
     for k in range(0, NUM_FOLDS):
         train = pairs[k][0].name
         validation = pairs[k][1].name
-        register_coco_instances("train_" + str(k), {}, train, "./Fine_tuned_Detectron2/data/Dataset/images")
-        register_coco_instances("validation_" + str(k), {}, validation, "./Fine_tuned_Detectron2/data/Dataset/images")
+        register_coco_instances("train_" + str(k), {}, train, os.path.join(dir_path, "images"))
+        register_coco_instances("validation_" + str(k), {}, validation, os.path.join(dir_path, "images"))
         train_dataset.append("train_" + str(k))
         val_dataset.append("validation_" + str(k))
     cfg.OUTPUT_DIR = "./Fine_tuned_Detectron2/models"
@@ -296,7 +297,12 @@ def setup(pairs,k):
 
 
 def main():
-    data = json.load(open("./Fine_tuned_Detectron2/data/dataset.json", 'r'))    #Load coco format json
+    args = argparse.ArgumentParser()
+    args.add_argument("--data_dir", type=str, default="./Fine_tuned_Detectron2/data/Dataset/Dataset_vidrio")
+    args = args.parse_args()
+    dir_path = args.data_dir
+
+    data = json.load(open(os.path.join(dir_path, "coco_format.json"))) #Load data
    
     image_data = data['images'] #Get image data
     annotations = data['annotations'] #Get annotations
@@ -306,7 +312,7 @@ def main():
     # Get category ID for each image
     category_ids = [annotations[i]['category_id'] for i in range(len(annotations))]
 
-    pairs = k_fold_data(image_ids, category_ids, image_data, data) #Split data into k folds
+    pairs = k_fold_data(image_ids, category_ids, image_data, data, dir_path) #Split data into k folds
     
     #batch_size = [2,4,6,8,10]
     lrates = [0.001]
@@ -315,7 +321,7 @@ def main():
     #lrates = [0.001,0.0001,0.00001]
     #batch_size_per_image = [64,128,256,512]
 
-    cfg = setup(pairs, NUM_FOLDS)
+    cfg = setup(pairs, NUM_FOLDS, dir_path)    #Setup config file
     max_result = {"bbox": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0 }, "segm": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0}}
     max_result_n = 0
     count = 0
