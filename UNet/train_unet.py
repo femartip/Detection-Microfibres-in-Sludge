@@ -16,6 +16,7 @@ import psutil
 from SegmentationDataset import get_k_fold_dataset, SegmentationDataset
 
 SEED = 42
+FOLD = 0
 
 def calculate_mAP(preds, targets, threshold=0.5):
     """
@@ -89,6 +90,10 @@ def train_model(model,device, train_dataset, val_dataset):
     
     global_step = 0
     epoch_loss = 0
+    train_losses = []
+    train_accuracies = []
+    val_losses = []
+    val_accuracies = []
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
@@ -116,14 +121,11 @@ def train_model(model,device, train_dataset, val_dataset):
             #torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
             grad_scaler.step(optimizer)
             grad_scaler.update()
-            
-            logging.info(f"Epoch: {epoch + 1}, Batch: {idx + 1}, Loss: {loss.item():.4f}")
-
+        
             batch_accuracy = calculate_accuracy(torch.sigmoid(masks_pred), true_masks)
             epoch_acc += batch_accuracy
             epoch_loss += loss.item()
             num_batches += 1
-            logging.info(f"Accuracy: {batch_accuracy:.4f}")
 
             
         avg_epoch_loss = epoch_loss / num_batches
@@ -131,7 +133,18 @@ def train_model(model,device, train_dataset, val_dataset):
         model.to("cpu")
         mAP_five, mean_accuracy_five = evaluate_model(model, val_loader, threshold=0.5)
         model.to(device)
+        train_losses.append(avg_epoch_loss)
+        train_accuracies.append(avg_epoch_acc)
+        val_losses.append(mAP_five)
+        val_accuracies.append(mean_accuracy_five)
         print(f"Epoch: {epoch + 1}, Loss: {avg_epoch_loss:.4f}, Accuracy: {avg_epoch_acc:.4f}, Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
+
+        np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
+        np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
+        np.save("UNet/results/val_losses_fold_{}.npy".format(FOLD), val_losses)
+        np.save("UNet/results/val_accuracies_fold_{}.npy".format(FOLD), val_accuracies)
+        
+        torch.save(model.state_dict(), "UNet/models/model_fold_{}.pth".format(FOLD))
 
 
 if __name__ == '__main__':
@@ -153,6 +166,7 @@ if __name__ == '__main__':
 
     for fold, (train_ids, val_ids) in enumerate(dataset_ids):
         print("Segmentation fold: ", fold)
+        FOLD = fold
         train_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"), train_ids)
         val_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"), val_ids)
         train_model(model, device, train_dataset, val_dataset)
