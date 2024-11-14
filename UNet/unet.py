@@ -4,11 +4,69 @@ import torch.nn.functional as F
 from torch import sigmoid
 
 
+def double_conv(in_channels, out_channels):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+        nn.ReLU(inplace=True)
+    )   
+
+
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False):
+
+    def __init__(self, n_classes):
+        super().__init__()
+        self.dconv_down1 = double_conv(3, 64)   #size = (N, 64, H/2, W/2)
+        self.dconv_down2 = double_conv(64, 128) #size = (N, 128, H/4, W/4)
+        self.dconv_down3 = double_conv(128, 256)    #size = (N, 256, H/8, W/8)
+        self.dconv_down4 = double_conv(256, 512)    #size = (N, 512, H/16, W/16)
+
+        self.maxpool = nn.MaxPool2d(2)  
+        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)      
+        
+        self.dconv_up3 = double_conv(256 + 512, 256)    #size = (N, 256, H/8, W/8)
+        self.dconv_up2 = double_conv(128 + 256, 128)    #size = (N, 128, H/4, W/4)
+        self.dconv_up1 = double_conv(128 + 64, 64)  #size = (N, 64, H/2, W/2)
+        
+        self.conv_last = nn.Conv2d(64, n_classes, 1)
+        
+        
+    def forward(self, x):       
+        conv1 = self.dconv_down1(x)
+        x = self.maxpool(conv1)
+        
+        conv2 = self.dconv_down2(x)
+        x = self.maxpool(conv2)
+        
+        conv3 = self.dconv_down3(x)
+        x = self.maxpool(conv3)   
+        
+        x = self.dconv_down4(x)
+        
+        x = self.upsample(x)       
+         
+        x = torch.cat([F.interpolate(x, conv3.size()[2:], mode='bilinear', align_corners=False), conv3], dim=1)
+        
+        x = self.dconv_up3(x)
+        x = self.upsample(x)        
+        x = torch.cat([F.interpolate(x, conv2.size()[2:], mode='bilinear', align_corners=False), conv2], dim=1)       
+
+        x = self.dconv_up2(x)
+        x = self.upsample(x)        
+        x = torch.cat([F.interpolate(x, conv1.size()[2:], mode='bilinear', align_corners=False), conv1], dim=1)   
+        
+        x = self.dconv_up1(x)
+        
+        out = self.conv_last(x)
+        
+        return out
+"""
+class UNet(nn.Module):
+    def __init__(self, n_channels, n_classeses, bilinear=False):
         super(UNet, self).__init__()
         self.n_channels = n_channels
-        self.n_classes = n_classes
+        self.n_classeses = n_classeses
         self.bilinear = bilinear
 
         self.inc = (DoubleConv(n_channels, 64))
@@ -21,7 +79,7 @@ class UNet(nn.Module):
         self.up2 = (Up(512, 256 // factor, bilinear))
         self.up3 = (Up(256, 128 // factor, bilinear))
         self.up4 = (Up(128, 64, bilinear))
-        self.outc = (OutConv(64, n_classes))
+        self.outc = (OutConv(64, n_classeses))
 
     def forward(self, x):
         x1 = self.inc(x)
@@ -36,7 +94,6 @@ class UNet(nn.Module):
         logits = self.outc(x)
         return sigmoid(logits)
 
-    """
     def use_checkpointing(self):
         self.inc = torch.utils.checkpoint(self.inc)
         self.down1 = torch.utils.checkpoint(self.down1)
@@ -48,9 +105,9 @@ class UNet(nn.Module):
         self.up3 = torch.utils.checkpoint(self.up3)
         self.up4 = torch.utils.checkpoint(self.up4)
         self.outc = torch.utils.checkpoint(self.outc)
-"""
+
 class DoubleConv(nn.Module):
-    """(convolution => [BN] => ReLU) * 2"""
+    #(convolution => [BN] => ReLU) * 2
 
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super().__init__()
@@ -70,7 +127,7 @@ class DoubleConv(nn.Module):
 
 
 class Down(nn.Module):
-    """Downscaling with maxpool then double conv"""
+    #Downscaling with maxpool then double conv
 
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -84,7 +141,7 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    """Upscaling then double conv"""
+    #Upscaling then double conv
 
     def __init__(self, in_channels, out_channels, bilinear=True):
         super().__init__()
@@ -119,3 +176,4 @@ class OutConv(nn.Module):
 
     def forward(self, x):
         return self.conv(x)
+        """

@@ -10,10 +10,10 @@ import cv2
 import numpy as np
 from torchvision import transforms
 class SegmentationDataset(Dataset):
-    def __init__(self, coco, images_dir, image_ids):
+    def __init__(self, coco, images_dir):
         self.coco = coco
         self.images_dir = images_dir
-        self.image_ids = image_ids
+        self.image_ids = coco.getImgIds()
 
         logging.info(f"Creating dataset with {len(self.image_ids)} images")
 
@@ -26,7 +26,7 @@ class SegmentationDataset(Dataset):
         image_path = os.path.join(self.images_dir, image_info['file_name'])
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
+
         mask_shape = (image_info['height'], image_info['width'])
         mask = np.zeros(mask_shape, dtype=np.uint8)
         ann_ids = self.coco.getAnnIds(imgIds=image_info['id'])

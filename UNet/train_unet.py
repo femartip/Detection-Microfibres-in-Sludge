@@ -11,7 +11,7 @@ import numpy as np
 from sklearn.metrics import average_precision_score
 from unet import UNet
 from pycocotools.coco import COCO
-import psutil
+import json
 
 from SegmentationDataset import get_k_fold_dataset, SegmentationDataset
 
@@ -157,17 +157,21 @@ if __name__ == '__main__':
         torch.cuda.empty_cache()
         logging.info(f'Using {torch.cuda.get_device_name(0)}')
 
-    model = UNet(n_channels=3, n_classes=1, bilinear=False)
+    model = UNet(n_classes=1)
     
-    data_dir = "./Fine_tuned_Detectron2/data/Dataset/Dataset_vidrio"
-    dataset_ids = get_k_fold_dataset(data_dir, NUM_FOLDS, seed=SEED)
-
+    data_dir = "./UNet/data/Dataset/Dataset_vidrio"
+    
     results = {}
 
-    for fold, (train_ids, val_ids) in enumerate(dataset_ids):
+    for fold in range(NUM_FOLDS):
         print("Segmentation fold: ", fold)
         FOLD = fold
-        train_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"), train_ids)
-        val_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"), val_ids)
+        train_coco = COCO(os.path.join(data_dir, f"train_coco_{fold}_fold.json"))
+        test = COCO(os.path.join(data_dir, f"test_coco_{fold}_fold.json"))
+        print("Train ids: {}, annotations: {}".format(len(train_coco.getImgIds()), len(train_coco.getAnnIds(train_coco.getImgIds()))))
+        print("Test ids: {}, annotations: {}".format(len(test.getImgIds()), len(test.getAnnIds(test.getImgIds()))))
+        
+        train_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"))
+        val_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"))
         train_model(model, device, train_dataset, val_dataset)
         
