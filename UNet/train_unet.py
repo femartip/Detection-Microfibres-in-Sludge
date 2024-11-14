@@ -116,11 +116,13 @@ def train_model(model,device, train_dataset, val_dataset):
                 #loss = loss.detach()
 
             optimizer.zero_grad(set_to_none=True)
-            grad_scaler.scale(loss).backward()
-            grad_scaler.unscale_(optimizer)
+            loss.backward()
+            optimizer.step()
+            #grad_scaler.scale(loss).backward()
+            #grad_scaler.unscale_(optimizer)
             #torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
-            grad_scaler.step(optimizer)
-            grad_scaler.update()
+            #grad_scaler.step(optimizer)
+            #grad_scaler.update()
         
             batch_accuracy = calculate_accuracy(torch.sigmoid(masks_pred), true_masks)
             epoch_acc += batch_accuracy
@@ -130,6 +132,7 @@ def train_model(model,device, train_dataset, val_dataset):
             
         avg_epoch_loss = epoch_loss / num_batches
         avg_epoch_acc = epoch_acc / num_batches
+        print(f"Epoch: {epoch + 1}, Loss: {avg_epoch_loss:.4f}, Accuracy: {avg_epoch_acc:.4f}")
         model.to("cpu")
         mAP_five, mean_accuracy_five = evaluate_model(model, val_loader, threshold=0.5)
         model.to(device)
@@ -137,7 +140,7 @@ def train_model(model,device, train_dataset, val_dataset):
         train_accuracies.append(avg_epoch_acc)
         val_losses.append(mAP_five)
         val_accuracies.append(mean_accuracy_five)
-        print(f"Epoch: {epoch + 1}, Loss: {avg_epoch_loss:.4f}, Accuracy: {avg_epoch_acc:.4f}, Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
+        print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
 
         np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
         np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
