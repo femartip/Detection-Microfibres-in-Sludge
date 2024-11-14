@@ -61,15 +61,11 @@ def split_data(train_indices, test_indices, image_ids, image_data, data):
         image_id = int(image['file_name'].split('.')[0])
         if image_id in train_image_ids:
             train_data['images'].append(image)
-        else:
+        elif image_id in test_image_ids:
             test_data['images'].append(image)
 
-    for annotation in data['annotations']:
-        image_id = annotation['image_id']
-        if image_id in train_image_ids:
-            train_data['annotations'].append(annotation)
-        else:
-            test_data['annotations'].append(annotation)
+    train_data['annotations'] = data['annotations']
+    test_data['annotations'] = data['annotations']
 
     return train_data, test_data
 
