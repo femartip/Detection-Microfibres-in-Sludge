@@ -69,7 +69,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
     batch_size = 8
-    learning_rate = 0.0001
+    learning_rate = 0.01
     val_percent = 0.1
     save_checkpoint = False
     img_scale = 0.5
@@ -154,11 +154,11 @@ if __name__ == '__main__':
     NUM_FOLDS = 5
     
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    print("Using device: ", device)
     #device = torch.device('cpu')
-    if device.type == 'cuda':
+    if device.type == 'cuda:1':
         torch.cuda.empty_cache()
-        logging.info(f'Using {torch.cuda.get_device_name(0)}')
 
     model = UNet(n_classes=1)
     
