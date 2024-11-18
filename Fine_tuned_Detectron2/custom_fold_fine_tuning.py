@@ -39,7 +39,7 @@ DEVICE = "cuda:1" if torch.cuda.is_available() else "cpu"
 seed = 42
 torch.manual_seed(seed)
 NUM_FOLDS = 5
-RESULTS_FILE = open("./Fine_tuned_Detectron2/models/results.txt", "a")
+#RESULTS_FILE = open("./Fine_tuned_Detectron2/models/results.txt", "a")
 TOTAL_RESULTS = []
 
 
@@ -326,6 +326,11 @@ def main():
     for bs in batch_size:
         for lr in lrates:
             for bsi in batch_size_per_image:
+                save_path = "./Fine_tuned_Detectron2/models/bs_" + str(bs) + "_lr_" + str(lr) + "_bsi_" + str(bsi)
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
+                RESULTS_FILE = open(os.path.join(save_path, "results.txt"), "a")
+                cfg.OUTPUT_DIR = save_path
                 cfg.SOLVER.IMS_PER_BATCH = bs
                 cfg.SOLVER.BASE_LR = lr
                 cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = bsi
@@ -339,7 +344,7 @@ def main():
                     model = build_model(cfg)    #Build model
                     model.to(DEVICE)
                     do_train(cfg, model, False, str(count) + "_" + str(k))    #Train model
-                    config_yaml_path = "./Fine_tuned_Detectron2/models/config"+str(count) + "_" + str(k)+".yaml"
+                    config_yaml_path = os.path.join(save_path, "config_" + str(count) + "_" + str(k) + ".yaml")
                     with open(config_yaml_path, 'w') as file:
                         yaml.dump(cfg, file)
                 mean_results()
