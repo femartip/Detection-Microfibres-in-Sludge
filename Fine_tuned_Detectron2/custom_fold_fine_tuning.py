@@ -315,7 +315,7 @@ def main():
     #batch_size_per_image = [128]
     #batch_size = [16]
     batch_size = [8,16]
-    lrates = [0.1,0.01,0.001]
+    lrates = [0.01,0.001,0.0001]
     batch_size_per_image = [64,128,256,512]
 
     cfg = setup(pairs, NUM_FOLDS, dir_path)    #Setup config file
