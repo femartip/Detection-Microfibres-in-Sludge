@@ -18,6 +18,19 @@ from SegmentationDataset import get_k_fold_dataset, SegmentationDataset
 SEED = 42
 FOLD = 0
 
+def dice_loss(pred, target, smooth=1e-5):
+    pred = torch.sigmoid(pred)  
+    pred = pred.contiguous()
+    target = target.contiguous()    
+    intersection = (pred * target).sum(dim=2).sum(dim=2)
+    loss = (1 - ((2. * intersection + smooth) / (pred.sum(dim=2).sum(dim=2) + target.sum(dim=2).sum(dim=2) + smooth)))
+    return loss.mean()
+
+def combined_loss(pred, target, alpha=0.5, beta=0.5):
+    bce = F.binary_cross_entropy_with_logits(pred, target)
+    dice = dice_loss(pred, target)
+    return alpha * bce + beta * dice
+
 def calculate_mAP(preds, targets, threshold=0.5):
     """
     Calculates the mean Average Precision (mAP) for binary segmentation.
@@ -68,25 +81,24 @@ def evaluate_model(model, val_loader, threshold=0.5):
 
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
-    batch_size = 8
+    batch_size = 4
     learning_rate = 0.01
     val_percent = 0.1
     save_checkpoint = False
     img_scale = 0.5
-    if device.type == 'cuda':
-        amp = True
-    else:
-        amp = False
+    #if device.type == 'cuda':
+    #    amp = True
+    #else:
+    #    amp = False
     weight_decay = 0.000000001
     momentum = 0.999
     gradient_clipping = 1.0
 
-    logging.info(f'''Starting training: Epochs:{epochs} Batch size:{batch_size} Learning rate:{learning_rate} Checkpoints:{save_checkpoint} Device:{device.type} Images scaling:{img_scale} Mixed Precision:{amp}''')
+    logging.info(f'''Starting training: Epochs:{epochs} Batch size:{batch_size} Learning rate:{learning_rate} Checkpoints:{save_checkpoint} Device:{device.type} Images scaling:{img_scale}''')
 
     optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5) 
-    grad_scaler = torch.cuda.amp.GradScaler(enabled=amp) # Automatic Mixed Precision, increases speed and reduces memory usage
-    criterion =  nn.BCEWithLogitsLoss()
+    #grad_scaler = torch.cuda.amp.GradScaler(enabled=amp) # Automatic Mixed Precision, increases speed and reduces memory usage
     
     global_step = 0
     epoch_loss = 0
@@ -110,19 +122,13 @@ def train_model(model,device, train_dataset, val_dataset):
             images = images.to(device=device)
             true_masks = true_masks.to(device=device)
 
-            with torch.cuda.amp.autocast(enabled=amp):
-                masks_pred = model.forward(images)
-                loss = criterion(masks_pred.squeeze(1), true_masks)
-                #loss = loss.detach()
+            masks_pred = model.forward(images)
+            loss = combined_loss(masks_pred, true_masks.unsqueeze(1))    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
+                
 
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
-            #grad_scaler.scale(loss).backward()
-            #grad_scaler.unscale_(optimizer)
-            #torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
-            #grad_scaler.step(optimizer)
-            #grad_scaler.update()
         
             batch_accuracy = calculate_accuracy(torch.sigmoid(masks_pred), true_masks)
             epoch_acc += batch_accuracy
@@ -154,10 +160,10 @@ if __name__ == '__main__':
     NUM_FOLDS = 5
     
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print("Using device: ", device)
     #device = torch.device('cpu')
-    if device.type == 'cuda:1':
+    if device.type == 'cuda:0':
         torch.cuda.empty_cache()
 
     model = UNet(n_classes=1)
