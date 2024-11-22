@@ -26,10 +26,23 @@ def dice_loss(pred, target, smooth=1e-5):
     loss = (1 - ((2. * intersection + smooth) / (pred.sum(dim=2).sum(dim=2) + target.sum(dim=2).sum(dim=2) + smooth)))
     return loss.mean()
 
-def combined_loss(pred, target, alpha=0.5, beta=0.5):
+def combined_loss(pred, target, metrics, alpha=0.5, beta=0.5):
     bce = F.binary_cross_entropy_with_logits(pred, target)
     dice = dice_loss(pred, target)
+
+    metrics['bce'] += bce.data.cpu().numpy() * target.size(0)
+    metrics['dice'] += dice.data.cpu().numpy() * target.size(0)
+    metrics['loss'] += (alpha * bce + beta * dice).data.cpu().numpy() * target.size(0)
+
     return alpha * bce + beta * dice
+
+def print_metrics(metrics):    
+    outputs = []
+    for k in metrics.keys():
+        outputs.append("{}: {:4f}".format(k, metrics[k]))
+    print(", ".join(outputs))
+        
+   
 
 def calculate_mAP(preds, targets, threshold=0.5):
     """
@@ -81,7 +94,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
-    batch_size = 4
+    batch_size = 8
     learning_rate = 0.01
     val_percent = 0.1
     save_checkpoint = False
@@ -110,11 +123,11 @@ def train_model(model,device, train_dataset, val_dataset):
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
+
     for epoch in range(epochs):
         model.train()
         model.to(device=device)
-        epoch_loss = 0
-        epoch_acc = 0
+        metrics = {'bce': 0.0, 'dice': 0.0, 'loss': 0.0, 'accuracy': 0.0}
         num_batches = 0
 
         for idx, batch in enumerate(train_loader):
@@ -123,22 +136,22 @@ def train_model(model,device, train_dataset, val_dataset):
             true_masks = true_masks.to(device=device)
 
             masks_pred = model.forward(images)
-            loss = combined_loss(masks_pred, true_masks.unsqueeze(1))    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
+            loss = combined_loss(masks_pred, true_masks.unsqueeze(1), metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
                 
 
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
         
-            batch_accuracy = calculate_accuracy(torch.sigmoid(masks_pred), true_masks)
-            epoch_acc += batch_accuracy
-            epoch_loss += loss.item()
-            num_batches += 1
-
+            metrics["accuracy"] = calculate_accuracy(torch.sigmoid(masks_pred), true_masks)
             
-        avg_epoch_loss = epoch_loss / num_batches
-        avg_epoch_acc = epoch_acc / num_batches
-        print(f"Epoch: {epoch + 1}, Loss: {avg_epoch_loss:.4f}, Accuracy: {avg_epoch_acc:.4f}")
+            num_batches += 1
+            
+        avg_epoch_loss = metrics['loss'] / num_batches
+        avg_epoch_acc = metrics['accuracy'] / num_batches
+        print(f"Epoch: {epoch + 1}")
+        print_metrics(metrics)
+
         model.to("cpu")
         mAP_five, mean_accuracy_five = evaluate_model(model, val_loader, threshold=0.5)
         model.to(device)
@@ -148,12 +161,12 @@ def train_model(model,device, train_dataset, val_dataset):
         val_accuracies.append(mean_accuracy_five)
         print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
 
-        np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
-        np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
-        np.save("UNet/results/val_losses_fold_{}.npy".format(FOLD), val_losses)
-        np.save("UNet/results/val_accuracies_fold_{}.npy".format(FOLD), val_accuracies)
-        
-        torch.save(model.state_dict(), "UNet/models/model_fold_{}.pth".format(FOLD))
+    np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
+    np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
+    np.save("UNet/results/val_losses_fold_{}.npy".format(FOLD), val_losses)
+    np.save("UNet/results/val_accuracies_fold_{}.npy".format(FOLD), val_accuracies)
+    
+    torch.save(model.state_dict(), "UNet/models/model_fold_{}.pth".format(FOLD))
 
 
 if __name__ == '__main__':
