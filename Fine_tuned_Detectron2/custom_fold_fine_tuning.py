@@ -311,12 +311,12 @@ def main():
     pairs = k_fold_data(image_ids, category_ids, image_data, data, dir_path) #Split data into k folds
     
     
-    #lrates = [0.01]
-    #batch_size_per_image = [128]
-    #batch_size = [16]
-    batch_size = [8,16]
-    lrates = [0.01,0.001,0.0001]
-    batch_size_per_image = [64,128,256,512]
+    lrates = [0.001,0.0001]
+    batch_size_per_image = [512]
+    batch_size = [16]
+    #batch_size = [8,16]
+    #lrates = [0.01,0.001,0.0001]
+    #batch_size_per_image = [128,256,512]
 
     cfg = setup(pairs, NUM_FOLDS, dir_path)    #Setup config file
     max_result = {"bbox": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0 }, "segm": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0}}
