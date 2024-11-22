@@ -94,7 +94,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
-    batch_size = 8
+    batch_size = 6
     learning_rate = 0.01
     val_percent = 0.1
     save_checkpoint = False
