@@ -312,7 +312,7 @@ def main():
     
     
     lrates = [0.001,0.0001]
-    batch_size_per_image = [512]
+    batch_size_per_image = [128,256]
     batch_size = [16]
     #batch_size = [8,16]
     #lrates = [0.01,0.001,0.0001]
