@@ -34,7 +34,7 @@ from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
 
 logger = logging.getLogger("detectron2")
-DEVICE = "cuda:1" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 #DEVICE = "cpu" 
 seed = 42
 torch.manual_seed(seed)
@@ -313,7 +313,7 @@ def main():
     
     #lrates = [0.001,0.0001]
     #batch_size_per_image = [128,256]
-    batch_size = [8]
+    batch_size = [16]
     #batch_size = [8,16]
     lrates = [0.01,0.001,0.0001]
     batch_size_per_image = [128,256,512]
