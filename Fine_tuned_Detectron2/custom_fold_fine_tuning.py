@@ -294,7 +294,7 @@ def setup(pairs,k, dir_path):
 
 def main():
     args = argparse.ArgumentParser()
-    args.add_argument("--data_dir", type=str, default="./Fine_tuned_Detectron2/data/Dataset/Dataset_vidrio")
+    args.add_argument("--data_dir", type=str, default="./Fine_tuned_Detectron2/data/Dataset/Dataset_CA")
     args = args.parse_args()
     dir_path = args.data_dir
 
@@ -311,12 +311,12 @@ def main():
     pairs = k_fold_data(image_ids, category_ids, image_data, data, dir_path) #Split data into k folds
     
     
-    lrates = [0.001,0.0001]
-    batch_size_per_image = [128,256]
-    batch_size = [16]
+    #lrates = [0.001,0.0001]
+    #batch_size_per_image = [128,256]
+    batch_size = [8]
     #batch_size = [8,16]
-    #lrates = [0.01,0.001,0.0001]
-    #batch_size_per_image = [128,256,512]
+    lrates = [0.01,0.001,0.0001]
+    batch_size_per_image = [128,256,512]
 
     cfg = setup(pairs, NUM_FOLDS, dir_path)    #Setup config file
     max_result = {"bbox": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0 }, "segm": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0}}
@@ -327,7 +327,7 @@ def main():
     for bs in batch_size:
         for lr in lrates:
             for bsi in batch_size_per_image:
-                save_path = "./Fine_tuned_Detectron2/models/bs_" + str(bs) + "_lr_" + str(lr) + "_bsi_" + str(bsi)
+                save_path = "./Fine_tuned_Detectron2/models/CA/bs_" + str(bs) + "_lr_" + str(lr) + "_bsi_" + str(bsi)
                 if not os.path.exists(save_path):
                     os.makedirs(save_path)
                 RESULTS_FILE = open(os.path.join(save_path, "results.txt"), "a")
