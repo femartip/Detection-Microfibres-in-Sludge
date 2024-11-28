@@ -116,7 +116,8 @@ def train_model(model,device, train_dataset, val_dataset):
     optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5) 
     #grad_scaler = torch.cuda.amp.GradScaler(enabled=amp) # Automatic Mixed Precision, increases speed and reduces memory usage
-    
+    loss_bce = nn.BCEWithLogitsLoss()
+
     global_step = 0
     epoch_loss = 0
     train_losses = []
@@ -133,6 +134,8 @@ def train_model(model,device, train_dataset, val_dataset):
         model.to(device=device)
         metrics = {'bce': 0.0, 'dice': 0.0, 'loss': 0.0, 'accuracy': 0.0}
         num_batches = 0
+        losses = []
+        accuracies = []
 
         for idx, batch in enumerate(train_loader):
             images, true_masks = batch
@@ -140,13 +143,16 @@ def train_model(model,device, train_dataset, val_dataset):
             true_masks = torch.stack(true_masks).to(device=device)
 
             masks_pred = model.forward(images)
-            loss = combined_loss(masks_pred, true_masks, metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
-            
+            #loss = combined_loss(masks_pred, true_masks, metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
+            loss = loss_bce(masks_pred, true_masks)
+
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
         
-            metrics["accuracy"] = calculate_accuracy(masks_pred, true_masks)
+            accuracy = calculate_accuracy(masks_pred, true_masks)
+            accuracies.append(accuracy)
+            losses.append(loss.item())
             
             num_batches += 1
             
@@ -164,12 +170,12 @@ def train_model(model,device, train_dataset, val_dataset):
         #val_accuracies.append(mean_accuracy_five)
         #print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
 
-    np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
-    np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
-    np.save("UNet/results/val_losses_fold_{}.npy".format(FOLD), val_losses)
-    np.save("UNet/results/val_accuracies_fold_{}.npy".format(FOLD), val_accuracies)
+    #np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
+    #np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
+    #np.save("UNet/results/val_losses_fold_{}.npy".format(FOLD), val_losses)
+    #np.save("UNet/results/val_accuracies_fold_{}.npy".format(FOLD), val_accuracies)
     
-    torch.save(model.state_dict(), "UNet/models/model_fold_{}.pth".format(FOLD))
+    #torch.save(model.state_dict(), "UNet/models/model_fold_{}.pth".format(FOLD))
 
 
 if __name__ == '__main__':
