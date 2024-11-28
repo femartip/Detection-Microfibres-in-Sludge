@@ -48,8 +48,6 @@ def print_metrics(metrics):
         outputs.append("{}: {:4f}".format(k, metrics[k]))
     print(", ".join(outputs))
         
-   
-
 def calculate_mAP(preds, targets, threshold=0.5):
     """
     Calculates the mean Average Precision (mAP) for binary segmentation.
@@ -100,7 +98,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
-    batch_size = 4
+    batch_size = 7
     learning_rate = 0.01
     val_percent = 0.1
     save_checkpoint = False
@@ -158,13 +156,13 @@ def train_model(model,device, train_dataset, val_dataset):
         print_metrics(metrics)
 
         model.to("cpu")
-        mAP_five, mean_accuracy_five = evaluate_model(model, val_loader, threshold=0.5)
+        #mAP_five, mean_accuracy_five = evaluate_model(model, val_loader, threshold=0.5)
         model.to(device)
         train_losses.append(avg_epoch_loss)
         train_accuracies.append(avg_epoch_acc)
-        val_losses.append(mAP_five)
-        val_accuracies.append(mean_accuracy_five)
-        print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
+        #val_losses.append(mAP_five)
+        #val_accuracies.append(mean_accuracy_five)
+        #print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
 
     np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
     np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
@@ -178,11 +176,11 @@ if __name__ == '__main__':
     NUM_FOLDS = 5
     
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cpu')
     print("Using device: ", device)
     
-    if device.type == 'cuda:0':
+    if device.type == 'cuda:1':
         torch.cuda.empty_cache()
 
     model = UNet(in_channels=3, num_classes=1)
