@@ -4,40 +4,57 @@ from collections import defaultdict
 import logging
 from sklearn.model_selection import StratifiedKFold
 from pycocotools.coco import COCO
+from pycocotools import mask as coco_mask
 import torch
 from torch.utils.data import Dataset, DataLoader
 import cv2
 import numpy as np
-from torchvision import transforms
-class SegmentationDataset(Dataset):
-    def __init__(self, coco, images_dir):
-        self.coco = coco
-        self.images_dir = images_dir
-        self.image_ids = coco.getImgIds()
+from torchvision import datasets
+from PIL import Image, ImageDraw
 
-        logging.info(f"Creating dataset with {len(self.image_ids)} images")
+class CocoMaskDataset(datasets.CocoDetection):
+    def __init__(self, root, annFile, transform=None):
+        super(CocoMaskDataset, self).__init__(root, annFile, transform)
+        self.coco = COCO(annFile)  # Load COCO API
 
-    def __len__(self):
-        return len(self.image_ids)
+    def __getitem__(self, index):
+        # Load image and target using parent class
+        img, targets = super(CocoMaskDataset, self).__getitem__(index)
 
-    def __getitem__(self, idx):
-        image_info = self.coco.loadImgs(self.image_ids[idx])[0]
-        
-        image_path = os.path.join(self.images_dir, image_info['file_name'])
-        image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # Convert image to tensor using transform
+        if self.transform:
+            img = self.transform(img)
+        if type(img) == Image.Image:
+            img = torch.from_numpy(np.array(img)).permute(2, 0, 1).float()
 
-        mask_shape = (image_info['height'], image_info['width'])
-        mask = np.zeros(mask_shape, dtype=np.uint8)
-        ann_ids = self.coco.getAnnIds(imgIds=image_info['id'])
-        anns = self.coco.loadAnns(ann_ids)
-        for ann in anns:
-            mask = np.maximum(mask, self.coco.annToMask(ann))
-        
-        image = torch.from_numpy(image).permute(2, 0, 1).float()
-        mask = torch.from_numpy(mask).float()
-        
-        return image, mask
+        # Generate binary masks for the annotations
+        bin_mask = np.zeros((1, img.shape[1], img.shape[2]), dtype=np.uint8)
+        for target in targets:
+            segmentation = target['segmentation']
+            height, width = img.shape[1:]
+            
+            if isinstance(segmentation, list):  # Polygon format
+                rle = coco_mask.frPyObjects(segmentation, height, width)  # Convert to RLE
+                binary_mask = coco_mask.decode(rle)  # Decode RLE to binary mask
+
+                # Handle multi-part objects (sum along axis 2 if necessary)
+                if len(binary_mask.shape) == 3:
+                    binary_mask = np.any(binary_mask, axis=2).astype(np.uint8)
+            else:  # If segmentation is already in RLE format
+                binary_mask = coco_mask.decode(segmentation)
+
+            bin_mask += binary_mask
+
+        bin_mask = torch.from_numpy(bin_mask).float()
+
+        return img, bin_mask
+
+    def _polygon_to_mask(self, polygons, image_size):
+        """Convert polygon segmentation to a binary mask."""
+        mask = Image.new('L', image_size, 0)
+        for polygon in polygons:
+            ImageDraw.Draw(mask).polygon(polygon, outline=1, fill=1)
+        return np.array(mask, dtype=np.uint8)
 
 
 def get_k_fold_dataset(data_dir, NUM_FOLDS=5, seed=42):

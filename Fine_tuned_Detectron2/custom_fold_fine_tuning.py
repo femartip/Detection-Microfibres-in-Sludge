@@ -34,7 +34,7 @@ from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
 
 logger = logging.getLogger("detectron2")
-DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda:1" if torch.cuda.is_available() else "cpu"
 #DEVICE = "cpu" 
 seed = 42
 torch.manual_seed(seed)

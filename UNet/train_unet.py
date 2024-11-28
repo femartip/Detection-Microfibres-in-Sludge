@@ -1,6 +1,8 @@
 import logging
 import os
 import torch
+import torchvision
+from torchvision import transforms
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import optim
@@ -13,10 +15,14 @@ from unet import UNet
 from pycocotools.coco import COCO
 import json
 
-from SegmentationDataset import get_k_fold_dataset, SegmentationDataset
+from SegmentationDataset import get_k_fold_dataset, CocoMaskDataset
 
 SEED = 42
 FOLD = 0
+
+def collate_fn(batch):
+    images, targets = zip(*batch)
+    return torch.stack(images, dim=0), targets
 
 def dice_loss(pred, target, smooth=1e-5):
     pred = torch.sigmoid(pred)  
@@ -94,7 +100,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
-    batch_size = 4
+    batch_size = 16
     learning_rate = 0.01
     val_percent = 0.1
     save_checkpoint = False
@@ -120,8 +126,8 @@ def train_model(model,device, train_dataset, val_dataset):
     val_losses = []
     val_accuracies = []
     
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, collate_fn=collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, collate_fn=collate_fn)
 
 
     for epoch in range(epochs):
@@ -133,17 +139,16 @@ def train_model(model,device, train_dataset, val_dataset):
         for idx, batch in enumerate(train_loader):
             images, true_masks = batch
             images = images.to(device=device)
-            true_masks = true_masks.to(device=device)
+            true_masks = torch.stack(true_masks).to(device=device)
 
             masks_pred = model.forward(images)
-            loss = combined_loss(masks_pred, true_masks.unsqueeze(1), metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
-                
-
+            loss = combined_loss(masks_pred, true_masks, metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
+            
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
         
-            metrics["accuracy"] = calculate_accuracy(torch.sigmoid(masks_pred), true_masks)
+            metrics["accuracy"] = calculate_accuracy(masks_pred, true_masks)
             
             num_batches += 1
             
@@ -173,10 +178,11 @@ if __name__ == '__main__':
     NUM_FOLDS = 5
     
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print("Using device: ", device)
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cpu')
-    if device.type == 'cuda:0':
+    print("Using device: ", device)
+    
+    if device.type == 'cuda:1':
         torch.cuda.empty_cache()
 
     model = UNet(n_classes=1)
@@ -193,7 +199,10 @@ if __name__ == '__main__':
         print("Train ids: {}, annotations: {}".format(len(train_coco.getImgIds()), len(train_coco.getAnnIds(train_coco.getImgIds()))))
         print("Test ids: {}, annotations: {}".format(len(test.getImgIds()), len(test.getAnnIds(test.getImgIds()))))
         
-        train_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"))
-        val_dataset = SegmentationDataset(COCO(data_dir + "/coco_format.json"), os.path.join(data_dir, "images"))
+        train_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"train_coco_{fold}_fold.json"))
+        #train_dataset = torchvision.datasets.CocoDetection(os.path.join(data_dir, "images"), os.path.join(data_dir, f"train_coco_{fold}_fold.json"), transform=transform)
+        
+        val_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"))
+        #val_dataset = torchvision.datasets.CocoDetection(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"), transform=transform)
         train_model(model, device, train_dataset, val_dataset)
         
