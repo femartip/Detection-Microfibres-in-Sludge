@@ -100,7 +100,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
-    batch_size = 16
+    batch_size = 4
     learning_rate = 0.01
     val_percent = 0.1
     save_checkpoint = False
@@ -178,14 +178,14 @@ if __name__ == '__main__':
     NUM_FOLDS = 5
     
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cpu')
     print("Using device: ", device)
     
-    if device.type == 'cuda:1':
+    if device.type == 'cuda:0':
         torch.cuda.empty_cache()
 
-    model = UNet(n_classes=1)
+    model = UNet(in_channels=3, num_classes=1)
     
     data_dir = "./UNet/data/Dataset/Dataset_vidrio"
     
