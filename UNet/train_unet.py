@@ -42,11 +42,6 @@ def combined_loss(pred, target, metrics, alpha=0.5, beta=0.5):
 
     return alpha * bce + beta * dice
 
-def print_metrics(metrics):    
-    outputs = []
-    for k in metrics.keys():
-        outputs.append("{}: {:4f}".format(k, metrics[k]))
-    print(", ".join(outputs))
         
 def calculate_mAP(preds, targets, threshold=0.5):
     """
@@ -161,10 +156,11 @@ def train_model(model,device, train_dataset, val_dataset):
             
             num_batches += 1
             
-        avg_epoch_loss = metrics['loss'] / num_batches
-        avg_epoch_acc = metrics['accuracy'] / num_batches
+        avg_epoch_loss = sum(losses) / num_batches
+        avg_epoch_acc = sum(accuracies) / num_batches
         print(f"Epoch: {epoch + 1}")
-        print_metrics(metrics)
+        print(f"Training Loss: {avg_epoch_loss:.4f}")
+        print(f"Training Accuracy: {avg_epoch_acc:.4f}")
 
         model.to("cpu")
         #mAP_five, mean_accuracy_five = evaluate_model(model, val_loader, threshold=0.5)
@@ -186,7 +182,7 @@ def train_model(model,device, train_dataset, val_dataset):
 if __name__ == '__main__':
     NUM_FOLDS = 5
     
-    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cpu')
     print("Using device: ", device)
