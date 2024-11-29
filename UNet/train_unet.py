@@ -141,16 +141,21 @@ def train_model(model,device, train_dataset, val_dataset):
             images, true_masks = batch
             images = images.to(device=device)
             true_masks = torch.stack(true_masks).to(device=device)
+            logging.debug(f"Batch {idx}, images: {images.shape}, masks: {true_masks.shape}")
 
             masks_pred = model.forward(images)
+            logging.debug(f"predicted masks: {masks_pred.shape}")
+            logging.debug(f"Max value pred: {masks_pred.max()}, Max value true {true_masks.max()}")
             #loss = combined_loss(masks_pred, true_masks, metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
             loss = loss_bce(masks_pred, true_masks)
+            logging.debug(f"Loss: {loss.item()}")
 
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
         
             accuracy = calculate_accuracy(masks_pred, true_masks)
+            logging.debug(f"Accuracy: {accuracy}")
             accuracies.append(accuracy)
             losses.append(loss.item())
             
@@ -181,7 +186,7 @@ def train_model(model,device, train_dataset, val_dataset):
 if __name__ == '__main__':
     NUM_FOLDS = 5
     
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
     device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cpu')
     print("Using device: ", device)
