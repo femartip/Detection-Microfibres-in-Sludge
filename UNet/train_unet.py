@@ -115,22 +115,19 @@ def train_model(model,device, train_dataset, val_dataset):
 
     global_step = 0
     epoch_loss = 0
-    train_losses = []
-    train_accuracies = []
-    val_losses = []
-    val_accuracies = []
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, collate_fn=collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, collate_fn=collate_fn)
 
+    metrics = {}
 
     for epoch in range(epochs):
         model.train()
         model.to(device=device)
-        metrics = {'bce': 0.0, 'dice': 0.0, 'loss': 0.0, 'accuracy': 0.0}
         num_batches = 0
         losses = []
         accuracies = []
+        aps = []
 
         for idx, batch in enumerate(train_loader):
             images, true_masks = batch
@@ -152,21 +149,27 @@ def train_model(model,device, train_dataset, val_dataset):
             accuracy = calculate_accuracy(masks_pred, true_masks)
             logging.debug(f"Accuracy: {accuracy}")
             accuracies.append(accuracy)
+            ap = calculate_mAP(masks_pred, true_masks)
+            logging.debug(f"mAP: {ap}")
+            aps.append(ap)
             losses.append(loss.item())
             
             num_batches += 1
             
         avg_epoch_loss = sum(losses) / num_batches
         avg_epoch_acc = sum(accuracies) / num_batches
+        mean_ap = sum(aps) / num_batches
         print(f"Epoch: {epoch + 1}")
         print(f"Training Loss: {avg_epoch_loss:.4f}")
         print(f"Training Accuracy: {avg_epoch_acc:.4f}")
+        print(f"Training mAP: {mean_ap:.4f}")
 
-        model.to("cpu")
+        
+        metrics[epoch+1] = {"train_loss": avg_epoch_loss, "train_accuracy": avg_epoch_acc, "train_mAP": mean_ap}
+        
+        # model.to("cpu")
         #mAP_five, mean_accuracy_five = evaluate_model(model, val_loader, threshold=0.5)
-        model.to(device)
-        train_losses.append(avg_epoch_loss)
-        train_accuracies.append(avg_epoch_acc)
+        #model.to(device)
         #val_losses.append(mAP_five)
         #val_accuracies.append(mean_accuracy_five)
         #print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
@@ -177,6 +180,7 @@ def train_model(model,device, train_dataset, val_dataset):
     #np.save("UNet/results/val_accuracies_fold_{}.npy".format(FOLD), val_accuracies)
     
     #torch.save(model.state_dict(), "UNet/models/model_fold_{}.pth".format(FOLD))
+    return metrics
 
 
 if __name__ == '__main__':
@@ -209,5 +213,9 @@ if __name__ == '__main__':
         
         val_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"))
         #val_dataset = torchvision.datasets.CocoDetection(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"), transform=transform)
-        train_model(model, device, train_dataset, val_dataset)
+        result = train_model(model, device, train_dataset, val_dataset)
+        results[fold] = result
+
+    print("Final results:")
+    print(results)
         
