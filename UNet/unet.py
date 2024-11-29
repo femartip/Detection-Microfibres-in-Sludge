@@ -103,4 +103,5 @@ class UNet(nn.Module):
         out = self.out(up_3)
         
         out = unpad(out, pads)
+        out = sigmoid(out)
         return out
