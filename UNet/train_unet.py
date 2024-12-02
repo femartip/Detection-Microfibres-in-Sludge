@@ -91,7 +91,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
     return mAP, mean_accuracy
 
 def train_model(model,device, train_dataset, val_dataset):
-    epochs = 5
+    epochs = 100
     batch_size = 7
     learning_rate = 0.1
     weight_decay = 0.000000001
@@ -102,7 +102,7 @@ def train_model(model,device, train_dataset, val_dataset):
 
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=4) 
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=10) 
     
     loss_bce = nn.BCEWithLogitsLoss()
     
