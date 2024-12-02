@@ -10,7 +10,8 @@ from torch.utils.data import DataLoader
 from Utils.cocosplit_cross_val import k_fold_data
 import cv2
 import numpy as np
-from sklearn.metrics import average_precision_score
+#from sklearn.metrics import average_precision_score
+from torchmetrics.functional.classification import average_precision
 from unet import UNet
 from pycocotools.coco import COCO
 import json
@@ -56,14 +57,12 @@ def calculate_mAP(preds, targets, threshold=0.5):
         mean Average Precision (mAP) score.
     """
     # Apply threshold to predictions
-    preds_bin = (preds > threshold).float()
+    #preds_bin = (preds > threshold).float()
     
-    # Flatten predictions and targets for computing AP
-    preds_bin_flatten = preds_bin.cpu().numpy()
-    targets_flatten = targets.cpu().numpy()
-
-    # Calculate average precision score
-    ap = average_precision_score(targets_flatten, preds_bin_flatten)
+    #preds_bin_flatten = torch.flatten(preds_bin)
+    targets_flatten = torch.flatten(targets)
+    
+    ap = average_precision(preds, targets_flatten, task="binary")
     return ap
 
 def calculate_accuracy(preds, targets):
@@ -152,7 +151,7 @@ def train_model(model,device, train_dataset, val_dataset):
                 logging.error(f"Predictions: {torch.min(masks_pred)}, {torch.max(masks_pred)}")
                 logging.error(f"True masks: {torch.min(true_masks)}, {torch.max(true_masks)}")
                 ap = 0
-                
+
             logging.debug(f"mAP: {ap}")
             aps.append(ap)
             losses.append(loss.item())
