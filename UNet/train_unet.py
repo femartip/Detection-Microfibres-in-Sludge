@@ -59,8 +59,8 @@ def calculate_mAP(preds, targets, threshold=0.5):
     preds = (preds > threshold).float()
     
     # Flatten predictions and targets for computing AP
-    preds = preds.view(-1).cpu().numpy()
-    targets = targets.view(-1).cpu().numpy()
+    preds = preds.cpu().numpy()
+    targets = targets.cpu().numpy()
 
     # Calculate average precision score
     ap = average_precision_score(targets, preds)
@@ -94,7 +94,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
     batch_size = 7
-    learning_rate = 0.0001
+    learning_rate = 0.001
     weight_decay = 0.000000001
     momentum = 0.999
     gradient_clipping = 1.0
@@ -103,7 +103,7 @@ def train_model(model,device, train_dataset, val_dataset):
 
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5) 
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=2) 
     
     loss_bce = nn.BCEWithLogitsLoss()
     
@@ -127,19 +127,20 @@ def train_model(model,device, train_dataset, val_dataset):
             true_masks = torch.stack(true_masks).to(device=device)
             logging.debug(f"Batch {idx}, images: {images.shape}, masks: {true_masks.shape}")
 
-            optimizer.zero_grad()   # Zero gradients
-
-            masks_pred = model.forward(images)  # Forward pass
+            masks_pred = model(images)  # Forward pass
 
             logging.debug(f"predicted masks: {masks_pred.shape}")
             logging.debug(f"Max value pred: {masks_pred.max()}, Max value true {true_masks.max()}")
             #loss = combined_loss(masks_pred, true_masks, metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
             loss = loss_bce(masks_pred, true_masks) 
+            optimizer.zero_grad()   # Zero gradients
+            
             loss.backward() 
-            logging.debug(f"Loss: {loss.item()}")
 
             optimizer.step()
-        
+
+            logging.debug(f"Loss: {loss.item()}")
+
             accuracy = calculate_accuracy(masks_pred, true_masks)
             logging.debug(f"Accuracy: {accuracy}")
             accuracies.append(accuracy)
@@ -150,6 +151,8 @@ def train_model(model,device, train_dataset, val_dataset):
             
             num_batches += 1
             
+        scheduler.step(sum(aps) / num_batches)
+
         avg_epoch_loss = sum(losses) / num_batches
         avg_epoch_acc = sum(accuracies) / num_batches
         mean_ap = sum(aps) / num_batches
