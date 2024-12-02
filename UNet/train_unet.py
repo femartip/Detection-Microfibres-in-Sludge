@@ -99,7 +99,7 @@ def train_model(model,device, train_dataset, val_dataset):
     momentum = 0.999
     gradient_clipping = 1.0
 
-    logging.info(f'''Starting training: Epochs:{epochs} Batch size:{batch_size} Learning rate:{learning_rate} Checkpoints:{save_checkpoint} Device:{device.type} Images scaling:{img_scale}''')
+    logging.info(f'''Starting training: Epochs:{epochs} Batch size:{batch_size} Learning rate:{learning_rate} Device:{device.type}''')
 
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
