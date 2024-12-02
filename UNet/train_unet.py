@@ -56,14 +56,14 @@ def calculate_mAP(preds, targets, threshold=0.5):
         mean Average Precision (mAP) score.
     """
     # Apply threshold to predictions
-    preds = (preds > threshold).float()
+    preds_bin = (preds > threshold).float()
     
     # Flatten predictions and targets for computing AP
-    preds = preds.cpu().numpy()
-    targets = targets.cpu().numpy()
+    preds_bin_flatten = preds_bin.cpu().numpy()
+    targets_flatten = targets.cpu().numpy()
 
     # Calculate average precision score
-    ap = average_precision_score(targets, preds)
+    ap = average_precision_score(targets_flatten, preds_bin_flatten)
     return ap
 
 def calculate_accuracy(preds, targets):
@@ -144,7 +144,15 @@ def train_model(model,device, train_dataset, val_dataset):
             accuracy = calculate_accuracy(masks_pred, true_masks)
             logging.debug(f"Accuracy: {accuracy}")
             accuracies.append(accuracy)
-            ap = calculate_mAP(masks_pred, true_masks)
+
+            try:
+                ap = calculate_mAP(masks_pred, true_masks)
+            except Exception as e:
+                logging.error(f"Error calculating mAP: {e}")
+                logging.error(f"Predictions: {torch.min(masks_pred)}, {torch.max(masks_pred)}")
+                logging.error(f"True masks: {torch.min(true_masks)}, {torch.max(true_masks)}")
+                ap = 0
+                
             logging.debug(f"mAP: {ap}")
             aps.append(ap)
             losses.append(loss.item())
