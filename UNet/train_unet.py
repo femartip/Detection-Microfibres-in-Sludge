@@ -95,26 +95,17 @@ def train_model(model,device, train_dataset, val_dataset):
     epochs = 5
     batch_size = 7
     learning_rate = 0.0001
-    val_percent = 0.1
-    save_checkpoint = False
-    img_scale = 0.5
-    #if device.type == 'cuda':
-    #    amp = True
-    #else:
-    #    amp = False
     weight_decay = 0.000000001
     momentum = 0.999
     gradient_clipping = 1.0
 
     logging.info(f'''Starting training: Epochs:{epochs} Batch size:{batch_size} Learning rate:{learning_rate} Checkpoints:{save_checkpoint} Device:{device.type} Images scaling:{img_scale}''')
 
-    optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
-    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5) 
-    #grad_scaler = torch.cuda.amp.GradScaler(enabled=amp) # Automatic Mixed Precision, increases speed and reduces memory usage
+    #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5) 
+    
     loss_bce = nn.BCEWithLogitsLoss()
-
-    global_step = 0
-    epoch_loss = 0
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, collate_fn=collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, collate_fn=collate_fn)
@@ -122,8 +113,9 @@ def train_model(model,device, train_dataset, val_dataset):
     metrics = {}
 
     for epoch in range(epochs):
-        model.train()
+        print(f"Epoch: {epoch + 1}")
         model.to(device=device)
+        model.train(True)
         num_batches = 0
         losses = []
         accuracies = []
@@ -135,15 +127,17 @@ def train_model(model,device, train_dataset, val_dataset):
             true_masks = torch.stack(true_masks).to(device=device)
             logging.debug(f"Batch {idx}, images: {images.shape}, masks: {true_masks.shape}")
 
-            masks_pred = model.forward(images)
+            optimizer.zero_grad()   # Zero gradients
+
+            masks_pred = model.forward(images)  # Forward pass
+
             logging.debug(f"predicted masks: {masks_pred.shape}")
             logging.debug(f"Max value pred: {masks_pred.max()}, Max value true {true_masks.max()}")
             #loss = combined_loss(masks_pred, true_masks, metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
-            loss = loss_bce(masks_pred, true_masks)
+            loss = loss_bce(masks_pred, true_masks) 
+            loss.backward() 
             logging.debug(f"Loss: {loss.item()}")
 
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
             optimizer.step()
         
             accuracy = calculate_accuracy(masks_pred, true_masks)
@@ -159,7 +153,6 @@ def train_model(model,device, train_dataset, val_dataset):
         avg_epoch_loss = sum(losses) / num_batches
         avg_epoch_acc = sum(accuracies) / num_batches
         mean_ap = sum(aps) / num_batches
-        print(f"Epoch: {epoch + 1}")
         print(f"Training Loss: {avg_epoch_loss:.4f}")
         print(f"Training Accuracy: {avg_epoch_acc:.4f}")
         print(f"Training mAP: {mean_ap:.4f}")
@@ -209,13 +202,13 @@ if __name__ == '__main__':
         print("Test ids: {}, annotations: {}".format(len(test.getImgIds()), len(test.getAnnIds(test.getImgIds()))))
         
         train_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"train_coco_{fold}_fold.json"))
-        #train_dataset = torchvision.datasets.CocoDetection(os.path.join(data_dir, "images"), os.path.join(data_dir, f"train_coco_{fold}_fold.json"), transform=transform)
         
         val_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"))
-        #val_dataset = torchvision.datasets.CocoDetection(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"), transform=transform)
         result = train_model(model, device, train_dataset, val_dataset)
         results[fold] = result
 
     print("Final results:")
-    print(results)
+    print("Mean train loss: ", np.mean([results[fold][epoch]["train_loss"] for fold in results for epoch in results[fold]]))
+    print("Mean train accuracy: ", np.mean([results[fold][epoch]["train_accuracy"] for fold in results for epoch in results[fold]]))
+    print("Mean train mAP: ", np.mean([results[fold][epoch]["train_mAP"] for fold in results for epoch in results[fold]]))
         
