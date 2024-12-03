@@ -97,13 +97,13 @@ def train_model(model,device, train_dataset, val_dataset):
     batch_size = 4
     learning_rate = 0.1
     weight_decay = 0.000000001
-    momentum = 0.999
-    gradient_clipping = 1.0
+    #momentum = 0.999
+    #gradient_clipping = 1.0
 
     logging.info(f'''Starting training: Epochs:{epochs} Batch size:{batch_size} Learning rate:{learning_rate} Device:{device.type}''')
 
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=10) 
     
     loss_bce = nn.BCEWithLogitsLoss()
