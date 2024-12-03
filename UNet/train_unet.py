@@ -7,12 +7,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import optim
 from torch.utils.data import DataLoader
+from torch.autograd import Variable
 from Utils.cocosplit_cross_val import k_fold_data
 import cv2
 import numpy as np
 #from sklearn.metrics import average_precision_score
 from torchmetrics.functional.classification import average_precision
 from unet import UNet
+from unet import BB_Unet
 from pycocotools.coco import COCO
 import json
 
@@ -122,7 +124,7 @@ def train_model(model,device, train_dataset, val_dataset):
 
         for idx, batch in enumerate(train_loader):
             images, true_masks = batch
-            images = images.to(device=device)
+            images = images.requires_grad_(True).to(device=device)
             true_masks = torch.stack(true_masks).to(device=device)
             logging.debug(f"Batch {idx}, images: {images.shape}, masks: {true_masks.shape}")
 
@@ -198,6 +200,7 @@ if __name__ == '__main__':
         torch.cuda.empty_cache()
 
     model = UNet(in_channels=3, num_classes=1)
+    #model = BB_Unet()
     
     data_dir = "./UNet/data/Dataset/Dataset_vidrio"
     
