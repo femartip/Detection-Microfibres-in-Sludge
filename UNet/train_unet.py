@@ -95,7 +95,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
 def train_model(model,device, train_dataset, val_dataset):
     epochs = 100
     batch_size = 4
-    learning_rate = 0.1
+    learning_rate = 0.01
     weight_decay = 0.000000001
     #momentum = 0.999
     #gradient_clipping = 1.0
