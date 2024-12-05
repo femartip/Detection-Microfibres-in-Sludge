@@ -187,7 +187,7 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
 if __name__ == '__main__':
     args = argparse.ArgumentParser()
     args.add_argument("--data_dir", type=str, default="./UNet/data/Dataset/Dataset_vidrio")
-    args.add_argument("--decive", type=str, default="cuda:1")
+    args.add_argument("--device", type=str, default="cuda:1")
     args.add_argument("--model", type=str, default="UNet")
     args.add_argument("--epochs", type=int, default=100)
     args.add_argument("--batch_size", type=int, default=4)
