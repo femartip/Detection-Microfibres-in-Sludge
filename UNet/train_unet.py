@@ -154,6 +154,9 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
             aps.append(ap)
             losses.append(loss.item())
             
+            if num_batches % 100 == 0:
+                print(f"Batch: {num_batches}, Loss: {loss.item()}, Accuracy: {accuracy}, mAP: {ap}")
+
             num_batches += 1
             
         scheduler.step(sum(aps) / num_batches)
@@ -207,7 +210,7 @@ if __name__ == '__main__':
 
     NUM_FOLDS = 5
     
-    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
     print("Using device: ", device)
     if device.type != 'cpu':
