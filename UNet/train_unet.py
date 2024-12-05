@@ -11,6 +11,7 @@ from torch.autograd import Variable
 from Utils.cocosplit_cross_val import k_fold_data
 import cv2
 import numpy as np
+import argparse
 #from sklearn.metrics import average_precision_score
 from torchmetrics.functional.classification import average_precision
 from unet import UNet
@@ -27,25 +28,22 @@ def collate_fn(batch):
     images, targets = zip(*batch)
     return torch.stack(images, dim=0), targets
 
-def dice_loss(pred, target, smooth=1e-5):
-    pred = torch.sigmoid(pred)  
-    pred = pred.contiguous()
-    target = target.contiguous()    
-    intersection = (pred * target).sum(dim=2).sum(dim=2)
-    loss = (1 - ((2. * intersection + smooth) / (pred.sum(dim=2).sum(dim=2) + target.sum(dim=2).sum(dim=2) + smooth)))
-    return loss.mean()
+def dice_coeff(input: torch.Tensor, target: torch.Tensor, reduce_batch_first: bool = False, epsilon: float = 1e-6):
+    assert input.size() == target.size()
+    assert input.dim() == 3 or not reduce_batch_first
 
-def combined_loss(pred, target, metrics, alpha=0.5, beta=0.5):
-    bce = F.binary_cross_entropy_with_logits(pred, target)
-    dice = dice_loss(pred, target)
+    sum_dim = (-1, -2) if input.dim() == 2 or not reduce_batch_first else (-1, -2, -3)
 
-    metrics['bce'] += bce.data.cpu().numpy() * target.size(0)
-    metrics['dice'] += dice.data.cpu().numpy() * target.size(0)
-    metrics['loss'] += (alpha * bce + beta * dice).data.cpu().numpy() * target.size(0)
+    inter = 2 * (input * target).sum(dim=sum_dim)
+    sets_sum = input.sum(dim=sum_dim) + target.sum(dim=sum_dim)
+    sets_sum = torch.where(sets_sum == 0, inter, sets_sum)
 
-    return alpha * bce + beta * dice
+    dice = (inter + epsilon) / (sets_sum + epsilon)
+    return dice.mean()
 
-        
+def dice_loss(input: torch.Tensor, target: torch.Tensor):
+    return 1 - dice_coeff(input, target)
+
 def calculate_mAP(preds, targets, threshold=0.5):
     """
     Calculates the mean Average Precision (mAP) for binary segmentation.
@@ -63,12 +61,12 @@ def calculate_mAP(preds, targets, threshold=0.5):
     
     #preds_bin_flatten = torch.flatten(preds_bin)
     #targets_flatten = torch.flatten(targets)
-    
     ap = average_precision(preds, targets.long(), task="binary")
     return ap
 
 def calculate_accuracy(preds, targets):
-    correct = (preds == targets).float()  
+    preds_bin = (preds > 0.5).float()
+    correct = (preds_bin == targets).float()  
     accuracy = correct.mean().item()  
     return accuracy
 
@@ -92,10 +90,7 @@ def evaluate_model(model, val_loader, threshold=0.5):
     mean_accuracy = sum(accuracies) / len(accuracies)
     return mAP, mean_accuracy
 
-def train_model(model,device, train_dataset, val_dataset):
-    epochs = 100
-    batch_size = 4
-    learning_rate = 0.01
+def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_rate=0.001, batch_size=4):
     weight_decay = 0.000000001
     #momentum = 0.999
     #gradient_clipping = 1.0
@@ -124,16 +119,17 @@ def train_model(model,device, train_dataset, val_dataset):
 
         for idx, batch in enumerate(train_loader):
             images, true_masks = batch
-            images = images.requires_grad_(True).to(device=device)
+            images = images.to(device=device)
             true_masks = torch.stack(true_masks).to(device=device)
             logging.debug(f"Batch {idx}, images: {images.shape}, masks: {true_masks.shape}")
 
             masks_pred = model(images)  # Forward pass
-
+            masks_pred = masks_pred.squeeze(1)
             logging.debug(f"predicted masks: {masks_pred.shape}")
-            logging.debug(f"Max value pred: {masks_pred.max()}, Max value true {true_masks.max()}")
+            logging.debug(f"Max value pred: {torch.sigmoid(masks_pred).max()}, Max value true {true_masks.max()}")
             #loss = combined_loss(masks_pred, true_masks, metrics)    # Calculates the loss as combination of BCE and Dice loss, this ensures pixel level precision
             loss = loss_bce(masks_pred, true_masks) 
+            loss += dice_loss(torch.sigmoid(masks_pred), true_masks)
             optimizer.zero_grad()   # Zero gradients
             
             loss.backward() 
@@ -142,12 +138,12 @@ def train_model(model,device, train_dataset, val_dataset):
 
             logging.debug(f"Loss: {loss.item()}")
 
-            accuracy = calculate_accuracy(masks_pred, true_masks)
+            accuracy = calculate_accuracy(torch.sigmoid(masks_pred), true_masks)
             logging.debug(f"Accuracy: {accuracy}")
             accuracies.append(accuracy)
 
             try:
-                ap = calculate_mAP(masks_pred, true_masks)
+                ap = calculate_mAP(torch.sigmoid(masks_pred), true_masks)
             except Exception as e:
                 logging.error(f"Error calculating mAP: {e}")
                 logging.error(f"Predictions: {torch.min(masks_pred)}, {torch.max(masks_pred)}")
@@ -189,20 +185,33 @@ def train_model(model,device, train_dataset, val_dataset):
 
 
 if __name__ == '__main__':
+    args = argparse.ArgumentParser()
+    args.add_argument("--data_dir", type=str, default="./UNet/data/Dataset/Dataset_vidrio")
+    args.add_argument("--decive", type=str, default="cuda:1")
+    args.add_argument("--model", type=str, default="UNet")
+    args.add_argument("--epochs", type=int, default=100)
+    args.add_argument("--batch_size", type=int, default=4)
+    args.add_argument("--learning_rate", type=float, default=0.001)
+
+    args = args.parse_args()
+
+    device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
+    data_dir = args.data_dir
+
+    if args.model == "UNet":
+        model = UNet(in_channels=3, num_classes=1)
+    elif args.model == "BB_Unet":
+        model = BB_Unet()
+    else:
+        raise ValueError("Model not supported")
+
     NUM_FOLDS = 5
     
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
-    #device = torch.device('cpu')
-    print("Using device: ", device)
-    
-    if device.type == 'cuda:1':
-        torch.cuda.empty_cache()
+    logging.basicConfig(level=logging.DEBUG, format='%(levelname)s: %(message)s')
 
-    model = UNet(in_channels=3, num_classes=1)
-    #model = BB_Unet()
-    
-    data_dir = "./UNet/data/Dataset/Dataset_vidrio"
+    print("Using device: ", device)
+    if device.type != 'cpu':
+        torch.cuda.empty_cache()
     
     results = {}
 
@@ -217,7 +226,7 @@ if __name__ == '__main__':
         train_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"train_coco_{fold}_fold.json"))
         
         val_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"))
-        result = train_model(model, device, train_dataset, val_dataset)
+        result = train_model(model, device, train_dataset, val_dataset, epochs=args.epochs, learning_rate=args.learning_rate, batch_size=args.batch_size)
         results[fold] = result
 
     print("Final results:")

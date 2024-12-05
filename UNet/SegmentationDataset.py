@@ -28,7 +28,7 @@ class CocoMaskDataset(datasets.CocoDetection):
             img = torch.from_numpy(np.array(img)).permute(2, 0, 1).float()
 
         # Generate binary masks for the annotations
-        bin_mask = np.zeros((1, img.shape[1], img.shape[2]), dtype=np.uint8)
+        bin_mask = np.zeros((img.shape[1], img.shape[2]), dtype=np.uint8)
         for target in targets:
             segmentation = target['segmentation']
             height, width = img.shape[1:]
@@ -46,7 +46,7 @@ class CocoMaskDataset(datasets.CocoDetection):
             bin_mask += binary_mask
 
         bin_mask = torch.from_numpy(bin_mask).float()
-
+        
         return img, bin_mask
 
     def _polygon_to_mask(self, polygons, image_size):
