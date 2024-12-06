@@ -99,7 +99,7 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
 
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=10) 
+    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=10) 
     
     loss_bce = nn.BCEWithLogitsLoss()
     
@@ -159,7 +159,7 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
 
             num_batches += 1
             
-        scheduler.step(sum(aps) / num_batches)
+        #scheduler.step(sum(aps) / num_batches)
 
         avg_epoch_loss = sum(losses) / num_batches
         avg_epoch_acc = sum(accuracies) / num_batches
