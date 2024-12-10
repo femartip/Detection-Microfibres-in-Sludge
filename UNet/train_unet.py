@@ -184,12 +184,7 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
         avg_epoch_loss = sum(losses) / num_batches
         avg_epoch_acc = sum(accuracies) / num_batches
         mean_ap = sum(aps) / num_batches
-        print(f"Training Loss: {avg_epoch_loss:.4f}")
-        print(f"Training Accuracy: {avg_epoch_acc:.4f}")
-        print(f"Training mAP: {mean_ap:.6f}")
-        print(f"Training mAP@0.5: {sum(aps_five) / num_batches:.6f}")
-        print(f"Training mAP@0.75: {sum(aps_sevenfive) / num_batches:.6f}")
-
+        print(f"Training Loss: {avg_epoch_loss:.4f}, Training Accuracy: {avg_epoch_acc:.4f}, Training mAP: {mean_ap:.6f}, Training mAP@0.5: {sum(aps_five) / num_batches:.6f}, Training mAP@0.75: {sum(aps_sevenfive) / num_batches:.6f}")
         
         metrics[epoch+1] = {"train_loss": avg_epoch_loss, "train_accuracy": avg_epoch_acc, "train_mAP": mean_ap}
         
