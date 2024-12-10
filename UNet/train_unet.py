@@ -202,7 +202,7 @@ if __name__ == '__main__':
     data_dir = args.data_dir
 
     if args.model == "UNet":
-        model = UNet(in_channels=3, num_classes=1)
+        model = UNet(num_classes=1)
     elif args.model == "BB_Unet":
         model = BB_Unet()
     else:
