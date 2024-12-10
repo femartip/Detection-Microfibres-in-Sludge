@@ -154,14 +154,10 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
             aps.append(ap)
             losses.append(loss.item())
             
-            if num_batches % 50 == 0:
-                if num_batches == 0:
-                    print(f"Batch: {num_batches}, Loss: {losses[0]:.4f}, Accuracy: {accuracies[0]:.4f}, mAP: {aps[0]:.6f}")
-                else:
-                    print(f"Batch: {num_batches}, Loss: {sum(losses) / num_batches:.4f}, Accuracy: {sum(accuracies) / num_batches:.4f}, mAP: {sum(aps) / num_batches:.6f}")
-
             num_batches += 1
-            
+            if num_batches % 50 == 0:
+                print(f"Batch: {num_batches}, Loss: {sum(losses) / num_batches:.4f}, Accuracy: {sum(accuracies) / num_batches:.4f}, mAP: {sum(aps) / num_batches:.6f}")
+    
         #scheduler.step(sum(aps) / num_batches)
 
         avg_epoch_loss = sum(losses) / num_batches
