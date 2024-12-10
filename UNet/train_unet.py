@@ -62,7 +62,7 @@ def calculate_mAP(preds, targets, threshold=None):
     #preds_bin_flatten = torch.flatten(preds_bin)
     #targets_flatten = torch.flatten(targets)
 
-    ap = average_precision(preds, targets.long(), task="binary", thresholds=threshold)
+    ap = average_precision(preds, targets, task="binary", thresholds=threshold)
     return ap
 
 def calculate_accuracy(preds, targets):
