@@ -84,8 +84,8 @@ def evaluate_model(model, val_loader):
             masks_pred = torch.sigmoid(masks_pred)
             true_masks = torch.stack(true_masks).long()
             ap = calculate_mAP(masks_pred, true_masks)
-            ap_five = calculate_mAP(masks_pred, true_masks, threshold=0.5)
-            ap_sevenfive = calculate_mAP(masks_pred, true_masks, threshold=0.75)
+            ap_five = calculate_mAP(masks_pred, true_masks, threshold=[0.5])
+            ap_sevenfive = calculate_mAP(masks_pred, true_masks, threshold=[0.75])
             accuracy = calculate_accuracy(masks_pred, true_masks)
 
             aps.append(ap)
