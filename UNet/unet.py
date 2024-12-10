@@ -208,54 +208,6 @@ class BBConv(Module):
         x = F.sigmoid(x)
         return x
 
-"""
-class Unet(Module):
-    def __init__(self,in_dim = 1,  drop_rate=0.4, bn_momentum=0.1, n_organs = 1):
-        super(Unet, self).__init__()
-
-        #Downsampling path
-        self.conv1 = DownConv(in_dim, 64, drop_rate, bn_momentum)
-        self.mp1 = nn.MaxPool2d(2)
-
-        self.conv2 = DownConv(64, 128, drop_rate, bn_momentum)
-        self.mp2 = nn.MaxPool2d(2)
-
-        self.conv3 = DownConv(128, 256, drop_rate, bn_momentum)
-        self.mp3 = nn.MaxPool2d(2)
-
-        # Bottle neck
-        self.conv4 = DownConv(256, 256, drop_rate, bn_momentum)
-
-        # Upsampling path
-        self.up1 = UpConv(512, 256, drop_rate, bn_momentum)
-        self.up2 = UpConv(384, 128, drop_rate, bn_momentum)
-        self.up3 = UpConv(192, 64, drop_rate, bn_momentum)
-
-        self.conv9 = nn.Conv2d(64, n_organs, kernel_size=3, padding=1)
-
-    def forward(self, x, comment = ' '):
-        x1 = self.conv1(x)
-        p1 = self.mp1(x1)
-
-        x2 = self.conv2(p1)
-        p2 = self.mp2(x2)
-
-        x3 = self.conv3(p2)
-        p3 = self.mp3(x3)
-
-        # Bottom
-        x4 = self.conv4(p3)
-
-        # Up-sampling
-        u1 = self.up1(x4, x3)
-        u2 = self.up2(u1, x2)
-        u3 = self.up3(u2, x1)
-
-        x5 = self.conv9(u3)
-        
-        return x5
-"""
-
 class BB_Unet(Module):
     """A reference U-Net model.
     .. seealso::
@@ -263,14 +215,20 @@ class BB_Unet(Module):
         Networks for Biomedical Image Segmentation
         ArXiv link: https://arxiv.org/abs/1505.04597
     """
-    def __init__(self, drop_rate=0.6, bn_momentum=0.1, no_grad=False, n_organs = 1, BB_boxes = 1):
+    def __init__(self, no_grad=False, BB_boxes = 1):
         super(BB_Unet, self).__init__()
         if no_grad is True:
             no_grad_state = True
         else:
             no_grad_state = False
         
-        #Downsampling path
+        #Downsampling path, encoder
+        encoder = vgg16(pretrained=True).features
+        encoder = vgg16(pretrained=True).features
+        self.down1 = nn.Sequential(*encoder[:6])
+        self.down2 = nn.Sequential(*encoder[6:13])
+        self.down3 = nn.Sequential(*encoder[13:20])
+        """
         self.conv1 = DownConv(3, 64, drop_rate, bn_momentum)
         self.mp1 = nn.MaxPool2d(2)
 
@@ -279,25 +237,36 @@ class BB_Unet(Module):
 
         self.conv3 = DownConv(128, 256, drop_rate, bn_momentum)
         self.mp3 = nn.MaxPool2d(2)
-
+        """
         # Bottle neck
-        self.conv4 = DownConv(256, 256, drop_rate, bn_momentum)
+        #self.conv4 = DownConv(256, 256, drop_rate, bn_momentum)
+        self.bottle_neck = nn.Sequential(*encoder[20:27])
+        self.conv_bottle_neck = DoubleConv(512, 1024)
+
         # bounding box encoder path:
         self.b1 = BBConv(BB_boxes, 256, 4, no_grad_state)
         self.b2 = BBConv(BB_boxes, 128, 2, no_grad_state)
         self.b3 = BBConv(BB_boxes, 64, 1, no_grad_state)
+
         # Upsampling path
+        self.up_convolution_1 = up_conv(1024, 512)
+        self.conv_1 = double_conv(1024, 512)
+        self.up_convolution_2 = up_conv(512, 256)
+        self.conv_2 = double_conv(512, 256)
+        self.up_convolution_3 = up_conv(256, 128)
+        self.conv_3 = double_conv(256, 128)
+
+        self.out = nn.Conv2d(in_channels=128, out_channels=1, kernel_size=1)
+        """
         self.up1 = UpConv(512, 256, drop_rate, bn_momentum)
         self.up2 = UpConv(384, 128, drop_rate, bn_momentum)
         self.up3 = UpConv(192, 64, drop_rate, bn_momentum)
 
         self.conv9 = nn.Conv2d(64, n_organs, kernel_size=3, padding=1)
-
+        """
 
     def forward(self, x, bb, comment= 'tr'):
-        #self.b1.conv1.requires_grad = False
-        #self.b2.conv1.requires_grad = False
-        #self.b3.conv1.requires_grad = False
+        """
         x1 = self.conv1(x)
         p1 = self.mp1(x1)
 
@@ -306,29 +275,62 @@ class BB_Unet(Module):
 
         x3 = self.conv3(p2)
         p3 = self.mp3(x3)
+        """
+        down1 = self.down1(x)
+        print(f"down1: {down1.shape}")
+        down2 = self.down2(down1)
+        print(f"down2: {down2.shape}")
+        down3 = self.down3(down2)
+        print(f"down3: {down3.shape}")
 
         # Bottle neck
-        x4 = self.conv4(p3)
+        #x4 = self.conv4(p3)
+        bottle_neck = self.bottle_neck(down3)
+        bottle_neck = self.conv_bottle_neck(bottle_neck)
+        print(f"bottle_neck: {bottle_neck.shape}")
+        
         # bbox encoder
         if comment == 'tr':
             f1_1 = self.b1(bb)
             f2_1 = self.b2(bb)
             f3_1 = self.b3(bb)
-            x3_1 = x3*f1_1
-            x2_1 = x2*f2_1
-            x1_1 = x1*f3_1
+        
+            x3_1 = down3*f3_1
+            x2_1 = down2*f2_1
+            x1_1 = down1*f1_1
             # Up-sampling
-            u1 = self.up1(x4, x3_1)
-            u2 = self.up2(u1, x2_1)
-            u3 = self.up3(u2, x1_1)
+            #u1 = self.up1(x4, x3_1)
+            #u2 = self.up2(u1, x2_1)
+            #u3 = self.up3(u2, x1_1)
+            u1 = self.up_convolution_1(bottle_neck)
+            u1 = torch.cat([u1, x3_1], 1)
+            u1 = self.conv_1(u1)
+            u2 = self.up_convolution_2(u1)
+            u2 = torch.cat([u2, x2_1], 1)
+            u2 = self.conv_2(u2)
+            u3 = self.up_convolution_3(u2)
+            u3 = torch.cat([u3, x1_1], 1)
+            u3 = self.conv_3(u3)
+
+
         elif comment == 'val':
-            x3_1 = x3
-            x2_1 = x2
-            x1_1 = x1
+            x3_1 = down3
+            x2_1 = down2
+            x1_1 = down1
             # Up-sampling
-            u1 = self.up1(x4, x3_1)
-            u2 = self.up2(u1, x2_1)
-            u3 = self.up3(u2, x1_1)
-        x5 = self.conv9(u3)
-        x5 = F.sigmoid(x5)
-        return x5
+            #u1 = self.up1(x4, x3_1)
+            #u2 = self.up2(u1, x2_1)
+            #u3 = self.up3(u2, x1_1)
+            u1 = self.up_convolution_1(bottle_neck)
+            u1 = torch.cat([u1, x3_1], 1)
+            u1 = self.conv_1(u1)
+            u2 = self.up_convolution_2(u1)
+            u2 = torch.cat([u2, x2_1], 1)
+            u2 = self.conv_2(u2)
+            u3 = self.up_convolution_3(u2)
+            u3 = torch.cat([u3, x1_1], 1)
+            u3 = self.conv_3(u3)
+
+        o = self.out(u3)
+        #o = F.sigmoid(o)
+        return o

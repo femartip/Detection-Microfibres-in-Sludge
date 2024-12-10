@@ -16,6 +16,7 @@ class CocoMaskDataset(datasets.CocoDetection):
     def __init__(self, root, annFile, transform=None):
         super(CocoMaskDataset, self).__init__(root, annFile, transform)
         self.coco = COCO(annFile)  # Load COCO API
+        self.ids = [img_id for img_id in self.ids if len(self.coco.getAnnIds(imgIds=img_id)) > 0]
 
     def __getitem__(self, index):
         # Load image and target using parent class
@@ -27,10 +28,13 @@ class CocoMaskDataset(datasets.CocoDetection):
         if type(img) == Image.Image:
             img = torch.from_numpy(np.array(img)).permute(2, 0, 1).float()
 
-        # Generate binary masks for the annotations
+        # Generate binary masks and bounding boxes for the annotations
         bin_mask = np.zeros((img.shape[1], img.shape[2]), dtype=np.uint8)
+        bboxes = []
         for target in targets:
             segmentation = target['segmentation']
+            bbox = target['bbox']
+
             height, width = img.shape[1:]
             
             if isinstance(segmentation, list):  # Polygon format
@@ -44,8 +48,10 @@ class CocoMaskDataset(datasets.CocoDetection):
                 binary_mask = coco_mask.decode(segmentation)
 
             bin_mask += binary_mask
+            bboxes.append(bbox)
 
         bin_mask = torch.from_numpy(bin_mask).float()
+        bboxes = torch.tensor(bboxes, dtype=torch.float32)
         
         return img, bin_mask
 

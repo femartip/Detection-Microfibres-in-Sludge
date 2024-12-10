@@ -44,7 +44,7 @@ def dice_coeff(input: torch.Tensor, target: torch.Tensor, reduce_batch_first: bo
 def dice_loss(input: torch.Tensor, target: torch.Tensor):
     return 1 - dice_coeff(input, target)
 
-def calculate_mAP(preds, targets, threshold=0.5):
+def calculate_mAP(preds, targets, threshold=None):
     """
     Calculates the mean Average Precision (mAP) for binary segmentation.
 
@@ -61,7 +61,8 @@ def calculate_mAP(preds, targets, threshold=0.5):
     
     #preds_bin_flatten = torch.flatten(preds_bin)
     #targets_flatten = torch.flatten(targets)
-    ap = average_precision(preds, targets.long(), task="binary")
+
+    ap = average_precision(preds, targets.long(), task="binary", thresholds=threshold)
     return ap
 
 def calculate_accuracy(preds, targets):
@@ -70,9 +71,11 @@ def calculate_accuracy(preds, targets):
     accuracy = correct.mean().item()  
     return accuracy
 
-def evaluate_model(model, val_loader, threshold=0.5):
+def evaluate_model(model, val_loader):
     model.eval()
     aps = []
+    aps_five = []
+    aps_sevenfive = []
     accuracies = []
 
     with torch.no_grad():
@@ -80,15 +83,21 @@ def evaluate_model(model, val_loader, threshold=0.5):
             masks_pred = model(images).squeeze(1)
             masks_pred = torch.sigmoid(masks_pred)
 
-            ap = calculate_mAP(masks_pred, true_masks, threshold)
+            ap = calculate_mAP(masks_pred, true_masks)
+            ap_five = calculate_mAP(masks_pred, true_masks, threshold=0.5)
+            ap_sevenfive = calculate_mAP(masks_pred, true_masks, threshold=0.75)
             accuracy = calculate_accuracy(masks_pred, true_masks)
 
             aps.append(ap)
+            aps_five.append(ap_five)
+            aps_sevenfive.append(ap_sevenfive)
             accuracies.append(accuracy)
 
     mAP = sum(aps) / len(aps)
+    mAP_five = sum(aps_five) / len(aps_five)
+    mAP_sevenfive = sum(aps_sevenfive) / len(aps_sevenfive)
     mean_accuracy = sum(accuracies) / len(accuracies)
-    return mAP, mean_accuracy
+    return mAP, mAP_five, mAP_sevenfive, mean_accuracy  
 
 def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_rate=0.001, batch_size=4):
     weight_decay = 0.000000001
@@ -116,6 +125,8 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
         losses = []
         accuracies = []
         aps = []
+        aps_five = []
+        aps_sevenfive = []
 
         for idx, batch in enumerate(train_loader):
             images, true_masks = batch
@@ -144,6 +155,8 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
 
             try:
                 ap = calculate_mAP(torch.sigmoid(masks_pred), true_masks)
+                ap_five = calculate_mAP(torch.sigmoid(masks_pred), true_masks, threshold=0.5)
+                ap_sevenfive = calculate_mAP(torch.sigmoid(masks_pred), true_masks, threshold=0.75)
             except Exception as e:
                 logging.error(f"Error calculating mAP: {e}")
                 logging.error(f"Predictions: {torch.min(masks_pred)}, {torch.max(masks_pred)}")
@@ -151,13 +164,20 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
                 ap = 0
             if torch.isnan(ap):
                 ap = 0
+            if torch.isnan(ap_five):
+                ap_five = 0
+            if torch.isnan(ap_sevenfive):
+                ap_sevenfive = 0
+
             logging.debug(f"mAP: {ap}")
             aps.append(ap)
+            aps_five.append(ap_five)
+            aps_sevenfive.append(ap_sevenfive)
             losses.append(loss.item())
             
             num_batches += 1
             if num_batches % 50 == 0:
-                print(f"Batch: {num_batches}, Loss: {sum(losses) / num_batches:.4f}, Accuracy: {sum(accuracies) / num_batches:.4f}, mAP: {sum(aps) / num_batches:.6f}")
+                print(f"Batch: {num_batches}, Loss: {sum(losses) / num_batches:.4f}, Accuracy: {sum(accuracies) / num_batches:.4f}, mAP: {sum(aps) / num_batches:.6f}, mAP@0.5: {sum(aps_five) / num_batches:.6f}, mAP@0.75: {sum(aps_sevenfive) / num_batches:.6f}")
     
         #scheduler.step(sum(aps) / num_batches)
 
@@ -167,16 +187,21 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
         print(f"Training Loss: {avg_epoch_loss:.4f}")
         print(f"Training Accuracy: {avg_epoch_acc:.4f}")
         print(f"Training mAP: {mean_ap:.6f}")
+        print(f"Training mAP@0.5: {sum(aps_five) / num_batches:.6f}")
+        print(f"Training mAP@0.75: {sum(aps_sevenfive) / num_batches:.6f}")
 
         
         metrics[epoch+1] = {"train_loss": avg_epoch_loss, "train_accuracy": avg_epoch_acc, "train_mAP": mean_ap}
         
-        # model.to("cpu")
-        #mAP_five, mean_accuracy_five = evaluate_model(model, val_loader, threshold=0.5)
-        #model.to(device)
-        #val_losses.append(mAP_five)
-        #val_accuracies.append(mean_accuracy_five)
-        #print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, Validation Accuracy: {mean_accuracy_five:.4f}")
+        model.to("cpu")
+        mAP, mAP_five, mAP_sevenfive, mean_accuracy = evaluate_model(model, val_loader)
+        model.to(device)
+        metrics[epoch+1]["val_mAP"] = mAP
+        metrics[epoch+1]["val_mAP_five"] = mAP_five
+        metrics[epoch+1]["val_mAP_sevenfive"] = mAP_sevenfive
+        metrics[epoch+1]["val_accuracy"] = mean_accuracy
+
+        print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, mAP |IoU 0.5|: {mAP:.4f}, mAP |IoU 0.75|: {mAP_sevenfive:.4f}, Accuracy: {mean_accuracy:.4f}")
 
     #np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
     #np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
@@ -236,4 +261,8 @@ if __name__ == '__main__':
     print("Mean train loss: ", np.mean([results[fold][epoch]["train_loss"] for fold in results for epoch in results[fold]]))
     print("Mean train accuracy: ", np.mean([results[fold][epoch]["train_accuracy"] for fold in results for epoch in results[fold]]))
     print("Mean train mAP: ", np.mean([results[fold][epoch]["train_mAP"] for fold in results for epoch in results[fold]]))
+    print("Mean val mAP: ", np.mean([results[fold][epoch]["val_mAP"] for fold in results for epoch in results[fold]]))
+    print("Mean val mAP@0.5: ", np.mean([results[fold][epoch]["val_mAP_five"] for fold in results for epoch in results[fold]]))
+    print("Mean val mAP@0.75: ", np.mean([results[fold][epoch]["val_mAP_sevenfive"] for fold in results for epoch in results[fold]]))
+    print("Mean val accuracy: ", np.mean([results[fold][epoch]["val_accuracy"] for fold in results for epoch in results[fold]]))
         
