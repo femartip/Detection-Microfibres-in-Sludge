@@ -149,7 +149,8 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
                 logging.error(f"Predictions: {torch.min(masks_pred)}, {torch.max(masks_pred)}")
                 logging.error(f"True masks: {torch.min(true_masks)}, {torch.max(true_masks)}")
                 ap = 0
-
+            if torch.isnan(ap):
+                ap = 0
             logging.debug(f"mAP: {ap}")
             aps.append(ap)
             losses.append(loss.item())
