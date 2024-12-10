@@ -155,8 +155,8 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
 
             try:
                 ap = calculate_mAP(torch.sigmoid(masks_pred), true_masks)
-                ap_five = calculate_mAP(torch.sigmoid(masks_pred), true_masks, threshold=0.5)
-                ap_sevenfive = calculate_mAP(torch.sigmoid(masks_pred), true_masks, threshold=0.75)
+                ap_five = calculate_mAP(torch.sigmoid(masks_pred), true_masks, threshold=[0.5])
+                ap_sevenfive = calculate_mAP(torch.sigmoid(masks_pred), true_masks, threshold=[0.75])
             except Exception as e:
                 logging.error(f"Error calculating mAP: {e}")
                 logging.error(f"Predictions: {torch.min(masks_pred)}, {torch.max(masks_pred)}")
