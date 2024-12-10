@@ -123,34 +123,34 @@ class UNet(nn.Module):
         x, pads = pad_to(x, 32)
 
         down_1 = self.down1(x)
-        print(f"down_1: {down_1.shape}")
+        #print(f"down_1: {down_1.shape}")
         down_2 = self.down2(down_1)
-        print(f"down_2: {down_2.shape}")
+        #print(f"down_2: {down_2.shape}")
         down_3 = self.down3(down_2)
-        print(f"down_3: {down_3.shape}")
+        #print(f"down_3: {down_3.shape}")
 
         bottle_neck = self.bottle_neck(down_3)
         bottle_neck = self.conv_bottle_neck(bottle_neck)
 
         up_1 = self.up_convolution_1(bottle_neck)
-        print(f"up_1: {up_1.shape}, down_3: {down_3.shape}")
+        #print(f"up_1: {up_1.shape}, down_3: {down_3.shape}")
         up_1 = torch.cat([up_1, down_3], 1)
         up_1 = self.conv_1(up_1)
 
         up_2 = self.up_convolution_2(up_1)
-        print(f"up_2: {up_2.shape}, down_2: {down_2.shape}")
+        #print(f"up_2: {up_2.shape}, down_2: {down_2.shape}")
         up_2 = torch.cat([up_2, down_2], 1)
         up_2 = self.conv_2(up_2)
 
         up_3 = self.up_convolution_3(up_2)
-        print(f"up_3: {up_3.shape}, down_1: {down_1.shape}")
+        #print(f"up_3: {up_3.shape}, down_1: {down_1.shape}")
         up_3 = torch.cat([up_3, down_1], 1)
         up_3 = self.conv_3(up_3)
         
         out = self.out(up_3)
         out = unpad(out, pads)
         out = F.interpolate(out, size=(750, 1000), mode='bilinear', align_corners=False)
-        print(f"out: {out.shape}")
+        #print(f"out: {out.shape}")
         return out
 
 
