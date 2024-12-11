@@ -34,7 +34,6 @@ from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
 
 logger = logging.getLogger("detectron2")
-DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 #DEVICE = "cpu" 
 seed = 42
 torch.manual_seed(seed)
@@ -299,8 +298,12 @@ def main():
     args.add_argument("--batch_size", type=int, default=16)
     args.add_argument("--lr", type=float, default=0.001)
     args.add_argument("--bspi", type=int, default=128)
+    args.add_argument("--device", type=str, default="cuda")
     args = args.parse_args()
     dir_path = args.data_dir
+
+    global DEVICE
+    DEVICE = args.device
 
     data = json.load(open(os.path.join(dir_path, "coco_format.json"))) #Load data
    
