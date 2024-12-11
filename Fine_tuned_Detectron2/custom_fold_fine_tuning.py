@@ -268,7 +268,7 @@ def do_train(cfg, model, resume,model_name):
         print_results(results, model_name)    #Print results
 
 
-def setup(pairs,k, dir_path):
+def setup(pairs,k, dir_path, epochs):
     #Create config file
     cfg = get_cfg()
     train_dataset = []
@@ -286,7 +286,7 @@ def setup(pairs,k, dir_path):
     cfg.TEST.EVAL_PERIOD = 50
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = 2
     cfg.DATALOADER.NUM_WORKERS = 0
-    cfg.SOLVER.MAX_ITER = 1500    # iterations to train for
+    cfg.SOLVER.MAX_ITER = epochs    # iterations to train for
     cfg.SOLVER.STEPS = []        # do not decay learning rate
     return cfg
 
@@ -295,6 +295,10 @@ def setup(pairs,k, dir_path):
 def main():
     args = argparse.ArgumentParser()
     args.add_argument("--data_dir", type=str, default="./Fine_tuned_Detectron2/data/Dataset/Dataset_vidrio")
+    args.add_argument("--epochs", type=int, default=10)
+    args.add_argument("--batch_size", type=int, default=16)
+    args.add_argument("--lr", type=float, default=0.001)
+    args.add_argument("--bspi", type=int, default=128)
     args = args.parse_args()
     dir_path = args.data_dir
 
@@ -310,15 +314,11 @@ def main():
 
     pairs = k_fold_data(image_ids, category_ids, image_data, data, dir_path) #Split data into k folds
     
-    
-    #lrates = [0.001,0.0001]
-    #batch_size_per_image = [128,256]
-    batch_size = [16]
-    #batch_size = [8,16]
-    lrates = [0.01, 0.001,0.0001]
-    batch_size_per_image = [64]
+    batch_size = [args.batch_size]
+    lrates = [args.lr]
+    batch_size_per_image = [args.bspi]
 
-    cfg = setup(pairs, NUM_FOLDS, dir_path)    #Setup config file
+    cfg = setup(pairs, NUM_FOLDS, dir_path, args.epochs)
     max_result = {"bbox": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0 }, "segm": {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,"AP-dark":0,"AP-light":0}}
     max_result_n = 0
     count = 0
