@@ -56,14 +56,11 @@ def calculate_mAP(preds, targets, threshold=None):
     Returns:
         mean Average Precision (mAP) score.
     """
-    # Apply threshold to predictions
-    #preds_bin = (preds > threshold).float()
-    
-    #preds_bin_flatten = torch.flatten(preds_bin)
-    #targets_flatten = torch.flatten(targets)
+    if threshold is None:
+        threshold = [0.5 + i * 0.05 for i in range(10)]
 
     ap = average_precision(preds, targets, task="binary", thresholds=threshold)
-    return ap
+    return ap*100
 
 def calculate_accuracy(preds, targets):
     preds_bin = (preds > 0.5).float()
@@ -80,9 +77,12 @@ def evaluate_model(model, val_loader):
 
     with torch.no_grad():
         for images, true_masks in val_loader:
+            images = images.to(device)
+            true_masks = torch.stack(true_masks).long().to(device)
+
             masks_pred = model(images).squeeze(1)
             masks_pred = torch.sigmoid(masks_pred)
-            true_masks = torch.stack(true_masks).long()
+            
             ap = calculate_mAP(masks_pred, true_masks)
             ap_five = calculate_mAP(masks_pred, true_masks, threshold=[0.5])
             ap_sevenfive = calculate_mAP(masks_pred, true_masks, threshold=[0.75])
@@ -108,7 +108,7 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
 
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    #scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=10) 
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5) 
     
     loss_bce = nn.BCEWithLogitsLoss()
     
@@ -179,29 +179,27 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
             if num_batches % 50 == 0:
                 print(f"Batch: {num_batches}, Loss: {sum(losses) / num_batches:.4f}, Accuracy: {sum(accuracies) / num_batches:.4f}, mAP: {sum(aps) / num_batches:.6f}, mAP@0.5: {sum(aps_five) / num_batches:.6f}, mAP@0.75: {sum(aps_sevenfive) / num_batches:.6f}")
     
-        #scheduler.step(sum(aps) / num_batches)
-
         avg_epoch_loss = sum(losses) / num_batches
         avg_epoch_acc = sum(accuracies) / num_batches
         mean_ap = sum(aps) / num_batches
-        print(f"Training Loss: {avg_epoch_loss:.4f}, Training Accuracy: {avg_epoch_acc:.4f}, Training mAP: {mean_ap:.6f}, Training mAP@0.5: {sum(aps_five) / num_batches:.6f}, Training mAP@0.75: {sum(aps_sevenfive) / num_batches:.6f}")
+
+        scheduler.step(mean_ap)
+
+        print(f"Training Loss: {avg_epoch_loss:.4f}, Training Accuracy: {avg_epoch_acc:.4f}, Training mAP: {mean_ap:.2f}, Training mAP@0.5: {sum(aps_five) / num_batches:.2f}, Training mAP@0.75: {sum(aps_sevenfive) / num_batches:.2f}")
         
         metrics[epoch+1] = {"train_loss": avg_epoch_loss, "train_accuracy": avg_epoch_acc, "train_mAP": mean_ap}
         
-        model.to("cpu")
         mAP, mAP_five, mAP_sevenfive, mean_accuracy = evaluate_model(model, val_loader)
-        model.to(device)
+        
         metrics[epoch+1]["val_mAP"] = mAP
         metrics[epoch+1]["val_mAP_five"] = mAP_five
         metrics[epoch+1]["val_mAP_sevenfive"] = mAP_sevenfive
         metrics[epoch+1]["val_accuracy"] = mean_accuracy
 
-        print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.4f}, mAP |IoU 0.5|: {mAP:.4f}, mAP |IoU 0.75|: {mAP_sevenfive:.4f}, Accuracy: {mean_accuracy:.4f}")
+        print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.2f}, mAP |IoU 0.5|: {mAP:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
 
-    #np.save("UNet/results/train_losses_fold_{}.npy".format(FOLD), train_losses)
-    #np.save("UNet/results/train_accuracies_fold_{}.npy".format(FOLD), train_accuracies)
-    #np.save("UNet/results/val_losses_fold_{}.npy".format(FOLD), val_losses)
-    #np.save("UNet/results/val_accuracies_fold_{}.npy".format(FOLD), val_accuracies)
+    with open("UNet/results/results_fold_{}.txt".format(FOLD), "w") as f:
+        f.write(json.dumps(metrics))
     
     #torch.save(model.state_dict(), "UNet/models/model_fold_{}.pth".format(FOLD))
     return metrics
@@ -220,6 +218,9 @@ if __name__ == '__main__':
 
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
     data_dir = args.data_dir
+
+    if os.path.exists("UNet/results") == False:
+        os.makedirs("UNet/results")
 
     if args.model == "UNet":
         model = UNet(num_classes=1)
@@ -260,4 +261,7 @@ if __name__ == '__main__':
     print("Mean val mAP@0.5: ", np.mean([results[fold][epoch]["val_mAP_five"] for fold in results for epoch in results[fold]]))
     print("Mean val mAP@0.75: ", np.mean([results[fold][epoch]["val_mAP_sevenfive"] for fold in results for epoch in results[fold]]))
     print("Mean val accuracy: ", np.mean([results[fold][epoch]["val_accuracy"] for fold in results for epoch in results[fold]]))
+
+    with open("UNet/results/final_results.txt", "w") as f:
+        f.write(json.dumps(results))
         
