@@ -186,14 +186,14 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
 
         print(f"Training Loss: {avg_epoch_loss:.4f}, Training Accuracy: {avg_epoch_acc:.4f}, Training mAP: {mean_ap:.2f}, Training mAP@0.5: {sum(aps_five) / num_batches:.2f}, Training mAP@0.75: {sum(aps_sevenfive) / num_batches:.2f}")
         
-        metrics[epoch+1] = {"train_loss": avg_epoch_loss, "train_accuracy": avg_epoch_acc, "train_mAP": mean_ap}
+        metrics[epoch+1] = {"train_loss": float(avg_epoch_loss), "train_accuracy": float(avg_epoch_acc), "train_mAP": float(mean_ap)}
         
         mAP, mAP_five, mAP_sevenfive, mean_accuracy = evaluate_model(model, val_loader)
         
-        metrics[epoch+1]["val_mAP"] = mAP
-        metrics[epoch+1]["val_mAP_five"] = mAP_five
-        metrics[epoch+1]["val_mAP_sevenfive"] = mAP_sevenfive
-        metrics[epoch+1]["val_accuracy"] = mean_accuracy
+        metrics[epoch+1]["val_mAP"] = float(mAP)
+        metrics[epoch+1]["val_mAP_five"] = float(mAP_five)
+        metrics[epoch+1]["val_mAP_sevenfive"] = float(mAP_sevenfive)
+        metrics[epoch+1]["val_accuracy"] = float(mean_accuracy)
 
         print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.2f}, mAP |IoU 0.5|: {mAP:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
 
