@@ -64,6 +64,17 @@ class DoubleConv(nn.Module):
     def forward(self, x):
         return self.conv_op(x)
 
+class DoubleConv_no_relu(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.conv_op = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+        )
+
+    def forward(self, x):
+        return self.conv_op(x)
+
 class DownSample(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -91,38 +102,52 @@ class UpSample(nn.Module):
 class UNet(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        self.down1 = DownSample(3, 64)
-        self.down2 = DownSample(64, 128)
-        self.down3 = DownSample(128, 256)
+        encoder = vgg16(pretrained=False).features
+        self.down1 = nn.Sequential(*encoder[:6])
+        self.down2 = nn.Sequential(*encoder[6:13])
+        self.down3 = nn.Sequential(*encoder[13:20])
         
-        self.bottle_neck = DoubleConv(256, 512)
+        self.bottle_neck = nn.Sequential(*encoder[20:27])
+        self.conv_bottle_neck = DoubleConv(512, 1024)
 
-        self.up3 = UpSample(512, 256)
-        self.up2 = UpSample(256, 128)
-        self.up1 = UpSample(128, 64)
+        self.up_convolution_1 = up_conv(1024, 512)
+        self.conv_1 = double_conv(1024, 512)
+        self.up_convolution_2 = up_conv(512, 256)
+        self.conv_2 = double_conv(512, 256)
+        self.up_convolution_3 = up_conv(256, 128)
+        self.conv_3 = double_conv(256, 128)
 
-        self.out = nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1)
+        self.out = nn.Conv2d(in_channels=128, out_channels=num_classes, kernel_size=1)
 
     def forward(self, x):
         x, pads = pad_to(x, 32)
 
-        down_1, x = self.down1(x)
+        down_1 = self.down1(x)
         #print(f"down_1: {down_1.shape}")
-        down_2, x = self.down2(x)
+        down_2 = self.down2(down_1)
         #print(f"down_2: {down_2.shape}")
-        down_3, x = self.down3(x)
+        down_3 = self.down3(down_2)
         #print(f"down_3: {down_3.shape}")
 
-        bottle_neck = self.bottle_neck(x)
+        bottle_neck = self.bottle_neck(down_3)
+        bottle_neck = self.conv_bottle_neck(bottle_neck)
 
-        up_3 = self.up3(bottle_neck, down_3)
-        #print(f"up_3: {up_3.shape}")
-        up_2 = self.up2(up_3, down_2)
-        #print(f"up_2: {up_2.shape}")
-        up_1 = self.up1(up_2, down_1)
-        #print(f"up_1: {up_1.shape}")
+        up_1 = self.up_convolution_1(bottle_neck)
+        #print(f"up_1: {up_1.shape}, down_3: {down_3.shape}")
+        up_1 = torch.cat([up_1, down_3], 1)
+        up_1 = self.conv_1(up_1)
 
-        out = self.out(up_1)
+        up_2 = self.up_convolution_2(up_1)
+        #print(f"up_2: {up_2.shape}, down_2: {down_2.shape}")
+        up_2 = torch.cat([up_2, down_2], 1)
+        up_2 = self.conv_2(up_2)
+
+        up_3 = self.up_convolution_3(up_2)
+        #print(f"up_3: {up_3.shape}, down_1: {down_1.shape}")
+        up_3 = torch.cat([up_3, down_1], 1)
+        up_3 = self.conv_3(up_3)
+        
+        out = self.out(up_3)
         out = unpad(out, pads)
         out = F.interpolate(out, size=(750, 1000), mode='bilinear', align_corners=False)
         #print(f"out: {out.shape}")
