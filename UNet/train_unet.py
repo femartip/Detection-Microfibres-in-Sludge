@@ -15,7 +15,6 @@ import argparse
 #from sklearn.metrics import average_precision_score
 from torchmetrics.functional.classification import average_precision
 from unet import UNet
-from unet import BB_Unet
 from pycocotools.coco import COCO
 import json
 
@@ -209,7 +208,6 @@ if __name__ == '__main__':
     args = argparse.ArgumentParser()
     args.add_argument("--data_dir", type=str, default="./UNet/data/Dataset/Dataset_vidrio")
     args.add_argument("--device", type=str, default="cuda:1")
-    args.add_argument("--model", type=str, default="UNet")
     args.add_argument("--epochs", type=int, default=100)
     args.add_argument("--batch_size", type=int, default=4)
     args.add_argument("--learning_rate", type=float, default=0.001)
@@ -222,13 +220,8 @@ if __name__ == '__main__':
     if os.path.exists("UNet/results") == False:
         os.makedirs("UNet/results")
 
-    if args.model == "UNet":
-        model = UNet(num_classes=1)
-    elif args.model == "BB_Unet":
-        model = BB_Unet()
-    else:
-        raise ValueError("Model not supported")
-
+    model = UNet(num_classes=1)
+    
     NUM_FOLDS = 5
     
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')

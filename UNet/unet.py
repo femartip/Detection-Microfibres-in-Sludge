@@ -64,17 +64,6 @@ class DoubleConv(nn.Module):
     def forward(self, x):
         return self.conv_op(x)
 
-class DoubleConv_no_relu(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.conv_op = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-        )
-
-    def forward(self, x):
-        return self.conv_op(x)
-
 class DownSample(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -102,52 +91,38 @@ class UpSample(nn.Module):
 class UNet(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        encoder = vgg16(pretrained=True).features
-        self.down1 = nn.Sequential(*encoder[:6])
-        self.down2 = nn.Sequential(*encoder[6:13])
-        self.down3 = nn.Sequential(*encoder[13:20])
+        self.down1 = DownSample(3, 64)
+        self.down2 = DownSample(64, 128)
+        self.down3 = DownSample(128, 256)
         
-        self.bottle_neck = nn.Sequential(*encoder[20:27])
-        self.conv_bottle_neck = DoubleConv(512, 1024)
+        self.bottle_neck = DoubleConv(256, 512)
 
-        self.up_convolution_1 = up_conv(1024, 512)
-        self.conv_1 = double_conv(1024, 512)
-        self.up_convolution_2 = up_conv(512, 256)
-        self.conv_2 = double_conv(512, 256)
-        self.up_convolution_3 = up_conv(256, 128)
-        self.conv_3 = double_conv(256, 128)
+        self.up3 = UpSample(512, 256)
+        self.up2 = UpSample(256, 128)
+        self.up1 = UpSample(128, 64)
 
-        self.out = nn.Conv2d(in_channels=128, out_channels=num_classes, kernel_size=1)
+        self.out = nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1)
 
     def forward(self, x):
         x, pads = pad_to(x, 32)
 
-        down_1 = self.down1(x)
+        down_1, x = self.down1(x)
         #print(f"down_1: {down_1.shape}")
-        down_2 = self.down2(down_1)
+        down_2, x = self.down2(x)
         #print(f"down_2: {down_2.shape}")
-        down_3 = self.down3(down_2)
+        down_3, x = self.down3(x)
         #print(f"down_3: {down_3.shape}")
 
-        bottle_neck = self.bottle_neck(down_3)
-        bottle_neck = self.conv_bottle_neck(bottle_neck)
+        bottle_neck = self.bottle_neck(x)
 
-        up_1 = self.up_convolution_1(bottle_neck)
-        #print(f"up_1: {up_1.shape}, down_3: {down_3.shape}")
-        up_1 = torch.cat([up_1, down_3], 1)
-        up_1 = self.conv_1(up_1)
+        up_3 = self.up3(bottle_neck, down_3)
+        #print(f"up_3: {up_3.shape}")
+        up_2 = self.up2(up_3, down_2)
+        #print(f"up_2: {up_2.shape}")
+        up_1 = self.up1(up_2, down_1)
+        #print(f"up_1: {up_1.shape}")
 
-        up_2 = self.up_convolution_2(up_1)
-        #print(f"up_2: {up_2.shape}, down_2: {down_2.shape}")
-        up_2 = torch.cat([up_2, down_2], 1)
-        up_2 = self.conv_2(up_2)
-
-        up_3 = self.up_convolution_3(up_2)
-        #print(f"up_3: {up_3.shape}, down_1: {down_1.shape}")
-        up_3 = torch.cat([up_3, down_1], 1)
-        up_3 = self.conv_3(up_3)
-        
-        out = self.out(up_3)
+        out = self.out(up_1)
         out = unpad(out, pads)
         out = F.interpolate(out, size=(750, 1000), mode='bilinear', align_corners=False)
         #print(f"out: {out.shape}")
@@ -157,7 +132,7 @@ class UNet(nn.Module):
 
 """
 BB-Unet
-"""
+
 
 class DownConv(Module):
     def __init__(self, in_feat, out_feat, drop_rate=0.4, bn_momentum=0.1):
@@ -209,12 +184,6 @@ class BBConv(Module):
         return x
 
 class BB_Unet(Module):
-    """A reference U-Net model.
-    .. seealso::
-        Ronneberger, O., et al (2015). U-Net: Convolutional
-        Networks for Biomedical Image Segmentation
-        ArXiv link: https://arxiv.org/abs/1505.04597
-    """
     def __init__(self, no_grad=False, BB_boxes = 1):
         super(BB_Unet, self).__init__()
         if no_grad is True:
@@ -228,16 +197,6 @@ class BB_Unet(Module):
         self.down1 = nn.Sequential(*encoder[:6])
         self.down2 = nn.Sequential(*encoder[6:13])
         self.down3 = nn.Sequential(*encoder[13:20])
-        """
-        self.conv1 = DownConv(3, 64, drop_rate, bn_momentum)
-        self.mp1 = nn.MaxPool2d(2)
-
-        self.conv2 = DownConv(64, 128, drop_rate, bn_momentum)
-        self.mp2 = nn.MaxPool2d(2)
-
-        self.conv3 = DownConv(128, 256, drop_rate, bn_momentum)
-        self.mp3 = nn.MaxPool2d(2)
-        """
         # Bottle neck
         #self.conv4 = DownConv(256, 256, drop_rate, bn_momentum)
         self.bottle_neck = nn.Sequential(*encoder[20:27])
@@ -257,25 +216,8 @@ class BB_Unet(Module):
         self.conv_3 = double_conv(256, 128)
 
         self.out = nn.Conv2d(in_channels=128, out_channels=1, kernel_size=1)
-        """
-        self.up1 = UpConv(512, 256, drop_rate, bn_momentum)
-        self.up2 = UpConv(384, 128, drop_rate, bn_momentum)
-        self.up3 = UpConv(192, 64, drop_rate, bn_momentum)
-
-        self.conv9 = nn.Conv2d(64, n_organs, kernel_size=3, padding=1)
-        """
 
     def forward(self, x, bb, comment= 'tr'):
-        """
-        x1 = self.conv1(x)
-        p1 = self.mp1(x1)
-
-        x2 = self.conv2(p1)
-        p2 = self.mp2(x2)
-
-        x3 = self.conv3(p2)
-        p3 = self.mp3(x3)
-        """
         down1 = self.down1(x)
         print(f"down1: {down1.shape}")
         down2 = self.down2(down1)
@@ -334,3 +276,4 @@ class BB_Unet(Module):
         o = self.out(u3)
         #o = F.sigmoid(o)
         return o
+"""
