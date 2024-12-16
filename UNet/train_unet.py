@@ -225,7 +225,7 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
         metrics[epoch+1]["val_loss"] = val_loss
 
         scheduler.step(mAP)
-        early_stopping(val_loss, model)
+        early_stopping(mAP, model)
         if early_stopping.early_stop:
             logging.warning("Early stopping")
             print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.2f}, mAP |IoU 0.5|: {mAP:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
