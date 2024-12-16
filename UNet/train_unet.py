@@ -23,6 +23,32 @@ from SegmentationDataset import get_k_fold_dataset, CocoMaskDataset
 SEED = 42
 FOLD = 0
 
+class EarlyStopping:
+    def __init__(self, patience=5, delta=0):
+        self.patience = patience
+        self.delta = delta
+        self.best_score = None
+        self.early_stop = False
+        self.counter = 0
+        self.best_model_state = None
+
+    def __call__(self, val_loss, model):
+        score = -val_loss
+        if self.best_score is None:
+            self.best_score = score
+            self.best_model_state = model.state_dict()
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.best_model_state = model.state_dict()
+            self.counter = 0
+
+    def load_best_model(self, model):
+        model.load_state_dict(self.best_model_state)
+
 def collate_fn(batch):
     images, targets = zip(*batch)
     return torch.stack(images, dim=0), targets
@@ -67,12 +93,13 @@ def calculate_accuracy(preds, targets):
     accuracy = correct.mean().item()  
     return accuracy
 
-def evaluate_model(model, val_loader):
+def evaluate_model(model, val_loader, loss_fn):
     model.eval()
     aps = []
     aps_five = []
     aps_sevenfive = []
     accuracies = []
+    losses = []
 
     with torch.no_grad():
         for images, true_masks in val_loader:
@@ -86,17 +113,20 @@ def evaluate_model(model, val_loader):
             ap_five = calculate_mAP(masks_pred, true_masks, threshold=[0.5])
             ap_sevenfive = calculate_mAP(masks_pred, true_masks, threshold=[0.75])
             accuracy = calculate_accuracy(masks_pred, true_masks)
+            loss = loss_fn(masks_pred, true_masks.float()) + dice_loss(masks_pred, true_masks.float())
 
             aps.append(ap)
             aps_five.append(ap_five)
             aps_sevenfive.append(ap_sevenfive)
             accuracies.append(accuracy)
+            losses.append(loss.item())
 
     mAP = sum(aps) / len(aps)
     mAP_five = sum(aps_five) / len(aps_five)
     mAP_sevenfive = sum(aps_sevenfive) / len(aps_sevenfive)
     mean_accuracy = sum(accuracies) / len(accuracies)
-    return mAP, mAP_five, mAP_sevenfive, mean_accuracy  
+    mean_loss = sum(losses) / len(losses)
+    return mAP, mAP_five, mAP_sevenfive, mean_accuracy, mean_loss
 
 def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_rate=0.001, batch_size=4):
     weight_decay = 0.000000001
@@ -108,7 +138,7 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5) 
-    
+    early_stopping = EarlyStopping(patience=5)
     loss_bce = nn.BCEWithLogitsLoss()
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, collate_fn=collate_fn)
@@ -182,18 +212,24 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
         avg_epoch_acc = sum(accuracies) / num_batches
         mean_ap = sum(aps) / num_batches
 
-        scheduler.step(mean_ap)
-
         print(f"Training Loss: {avg_epoch_loss:.4f}, Training Accuracy: {avg_epoch_acc:.4f}, Training mAP: {mean_ap:.2f}, Training mAP@0.5: {sum(aps_five) / num_batches:.2f}, Training mAP@0.75: {sum(aps_sevenfive) / num_batches:.2f}")
         
-        metrics[epoch+1] = {"train_loss": float(avg_epoch_loss), "train_accuracy": float(avg_epoch_acc), "train_mAP": float(mean_ap)}
+        metrics[epoch+1] = {"train_loss": float(avg_epoch_loss), "train_accuracy": float(avg_epoch_acc), "train_mAP": float(mean_ap), "train_mAP_five": float(sum(aps_five) / num_batches), "train_mAP_sevenfive": float(sum(aps_sevenfive) / num_batches)}
         
-        mAP, mAP_five, mAP_sevenfive, mean_accuracy = evaluate_model(model, val_loader)
+        mAP, mAP_five, mAP_sevenfive, mean_accuracy, val_loss = evaluate_model(model, val_loader, loss_bce)
         
         metrics[epoch+1]["val_mAP"] = float(mAP)
         metrics[epoch+1]["val_mAP_five"] = float(mAP_five)
         metrics[epoch+1]["val_mAP_sevenfive"] = float(mAP_sevenfive)
-        metrics[epoch+1]["val_accuracy"] = float(mean_accuracy)
+        metrics[epoch+1]["val_accuracy"] = (mean_accuracy)
+        metrics[epoch+1]["val_loss"] = val_loss
+
+        scheduler.step(mAP)
+        early_stopping(val_loss, model)
+        if early_stopping.early_stop:
+            logging.warning("Early stopping")
+            print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.2f}, mAP |IoU 0.5|: {mAP:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
+            break
 
         print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.2f}, mAP |IoU 0.5|: {mAP:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
 
@@ -219,8 +255,6 @@ if __name__ == '__main__':
 
     if os.path.exists("UNet/results") == False:
         os.makedirs("UNet/results")
-
-    model = UNet(num_classes=1)
     
     NUM_FOLDS = 5
     
@@ -243,6 +277,8 @@ if __name__ == '__main__':
         train_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"train_coco_{fold}_fold.json"))
         
         val_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"))
+        model = UNet(num_classes=1)
+
         result = train_model(model, device, train_dataset, val_dataset, epochs=args.epochs, learning_rate=args.learning_rate, batch_size=args.batch_size)
         results[fold] = result
 
@@ -250,10 +286,14 @@ if __name__ == '__main__':
     print("Mean train loss: ", np.mean([results[fold][epoch]["train_loss"] for fold in results for epoch in results[fold]]))
     print("Mean train accuracy: ", np.mean([results[fold][epoch]["train_accuracy"] for fold in results for epoch in results[fold]]))
     print("Mean train mAP: ", np.mean([results[fold][epoch]["train_mAP"] for fold in results for epoch in results[fold]]))
+    print("Mean train mAP@0.5: ", np.mean([results[fold][epoch]["train_mAP_five"] for fold in results for epoch in results[fold]]))
+    print("Mean train mAP@0.75: ", np.mean([results[fold][epoch]["train_mAP_sevenfive"] for fold in results for epoch in results[fold]]))
+    print("Mean val loss: ", np.mean([results[fold][epoch]["val_loss"] for fold in results for epoch in results[fold]]))
+    print("Mean val accuracy: ", np.mean([results[fold][epoch]["val_accuracy"] for fold in results for epoch in results[fold]]))
     print("Mean val mAP: ", np.mean([results[fold][epoch]["val_mAP"] for fold in results for epoch in results[fold]]))
     print("Mean val mAP@0.5: ", np.mean([results[fold][epoch]["val_mAP_five"] for fold in results for epoch in results[fold]]))
     print("Mean val mAP@0.75: ", np.mean([results[fold][epoch]["val_mAP_sevenfive"] for fold in results for epoch in results[fold]]))
-    print("Mean val accuracy: ", np.mean([results[fold][epoch]["val_accuracy"] for fold in results for epoch in results[fold]]))
+    
 
     with open("UNet/results/final_results.txt", "w") as f:
         f.write(json.dumps(results))
