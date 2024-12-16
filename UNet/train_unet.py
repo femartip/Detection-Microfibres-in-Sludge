@@ -32,8 +32,8 @@ class EarlyStopping:
         self.counter = 0
         self.best_model_state = None
 
-    def __call__(self, val_loss, model):
-        score = -val_loss
+    def __call__(self, val_mAP, model):
+        score = val_mAP
         if self.best_score is None:
             self.best_score = score
             self.best_model_state = model.state_dict()
