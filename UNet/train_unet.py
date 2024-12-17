@@ -24,30 +24,41 @@ SEED = 42
 FOLD = 0
 
 class EarlyStopping:
-    def __init__(self, patience=5, delta=0):
+    def __init__(self, patience=5, delta=0, verbose=False):
         self.patience = patience
         self.delta = delta
         self.best_score = None
         self.early_stop = False
         self.counter = 0
         self.best_model_state = None
+        self.verbose = verbose
 
     def __call__(self, val_mAP, model):
         score = val_mAP
         if self.best_score is None:
             self.best_score = score
             self.best_model_state = model.state_dict()
+            if self.verbose:
+                print(f"Validation mAP improved to {score:.4f}. Saving model...")
         elif score < self.best_score + self.delta:
             self.counter += 1
+            if self.verbose:
+                print(f"Validation mAP did not improve. Counter: {self.counter}/{self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
+                if self.verbose:
+                    print("Early stopping triggered.")
         else:
             self.best_score = score
             self.best_model_state = model.state_dict()
             self.counter = 0
+            if self.verbose:
+                print(f"Validation mAP improved to {score:.4f}. Saving model...")
 
     def load_best_model(self, model):
         model.load_state_dict(self.best_model_state)
+        if self.verbose:
+            print("Loaded best model state.")
 
 def collate_fn(batch):
     images, targets = zip(*batch)
@@ -137,8 +148,8 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
 
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5) 
-    early_stopping = EarlyStopping(patience=5)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5, verbose=True) 
+    early_stopping = EarlyStopping(patience=10, delta=3, verbose=True)
     loss_bce = nn.BCEWithLogitsLoss()
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, collate_fn=collate_fn)
@@ -228,10 +239,12 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
         early_stopping(mAP, model)
         if early_stopping.early_stop:
             logging.warning("Early stopping")
-            print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.2f}, mAP |IoU 0.5|: {mAP:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
+            model.load_state_dict(early_stopping.best_model_state)
+            mAP, mAP_five, mAP_sevenfive, mean_accuracy, val_loss = evaluate_model(model, val_loader, loss_bce)
+            print(f"Validation mAP |IoU 0.5:0.95|: {mAP:.2f}, mAP |IoU 0.5|: {mAP_five:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
             break
 
-        print(f"Validation mAP |IoU 0.5:0.95|: {mAP_five:.2f}, mAP |IoU 0.5|: {mAP:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
+        print(f"Validation mAP |IoU 0.5:0.95|: {mAP:.2f}, mAP |IoU 0.5|: {mAP_five:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
 
     with open("UNet/results/results_fold_{}.txt".format(FOLD), "w") as f:
         f.write(json.dumps(metrics))
