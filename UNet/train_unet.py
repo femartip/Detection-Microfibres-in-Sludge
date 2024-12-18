@@ -286,11 +286,14 @@ if __name__ == '__main__':
         test = COCO(os.path.join(data_dir, f"test_coco_{fold}_fold.json"))
         print("Train ids: {}, annotations: {}".format(len(train_coco.getImgIds()), len(train_coco.getAnnIds(train_coco.getImgIds()))))
         print("Test ids: {}, annotations: {}".format(len(test.getImgIds()), len(test.getAnnIds(test.getImgIds()))))
-        
+        # Get shape of images
+        img_shape = (train_coco.loadImgs(train_coco.getImgIds())[0]['height'], train_coco.loadImgs(train_coco.getImgIds())[0]['width'])
+        print("Image shape: ", img_shape)
+
         train_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"train_coco_{fold}_fold.json"))
         
         val_dataset = CocoMaskDataset(os.path.join(data_dir, "images"), os.path.join(data_dir, f"test_coco_{fold}_fold.json"))
-        model = UNet(num_classes=1)
+        model = UNet(num_classes=1, img_shape=img_shape)
 
         result = train_model(model, device, train_dataset, val_dataset, epochs=args.epochs, learning_rate=args.learning_rate, batch_size=args.batch_size)
         results[fold] = result

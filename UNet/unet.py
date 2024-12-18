@@ -100,8 +100,10 @@ class UpSample(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes: int, img_shape: tuple):
         super().__init__()
+        self.img_shape = img_shape
+
         encoder = vgg16(pretrained=False).features
         self.down1 = nn.Sequential(*encoder[:6])
         self.down2 = nn.Sequential(*encoder[6:13])
@@ -149,7 +151,7 @@ class UNet(nn.Module):
         
         out = self.out(up_3)
         out = unpad(out, pads)
-        out = F.interpolate(out, size=(750, 1000), mode='bilinear', align_corners=False)
+        out = F.interpolate(out, size=self.img_shape, mode='bilinear', align_corners=False)
         #print(f"out: {out.shape}")
         return out
 
