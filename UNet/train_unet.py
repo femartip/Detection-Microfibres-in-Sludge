@@ -149,7 +149,7 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
     #optimizer = optim.RMSprop(model.parameters(), lr=learning_rate, weight_decay=weight_decay, momentum=momentum)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5, verbose=True) 
-    early_stopping = EarlyStopping(patience=10, delta=3, verbose=True)
+    early_stopping = EarlyStopping(patience=10, verbose=True)
     loss_bce = nn.BCEWithLogitsLoss()
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, collate_fn=collate_fn)
@@ -236,15 +236,17 @@ def train_model(model,device, train_dataset, val_dataset, epochs=100, learning_r
         metrics[epoch+1]["val_loss"] = val_loss
 
         scheduler.step(mAP)
-        early_stopping(mAP, model)
+
+        print(f"Validation mAP |IoU 0.5:0.95|: {mAP:.2f}, mAP |IoU 0.5|: {mAP_five:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
+
+        early_stopping(float(mAP), model)
+
         if early_stopping.early_stop:
             logging.warning("Early stopping")
             model.load_state_dict(early_stopping.best_model_state)
             mAP, mAP_five, mAP_sevenfive, mean_accuracy, val_loss = evaluate_model(model, val_loader, loss_bce)
-            print(f"Validation mAP |IoU 0.5:0.95|: {mAP:.2f}, mAP |IoU 0.5|: {mAP_five:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
+            print(f"Final validation mAP |IoU 0.5:0.95|: {mAP:.2f}, mAP |IoU 0.5|: {mAP_five:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
             break
-
-        print(f"Validation mAP |IoU 0.5:0.95|: {mAP:.2f}, mAP |IoU 0.5|: {mAP_five:.2f}, mAP |IoU 0.75|: {mAP_sevenfive:.2f}, Accuracy: {mean_accuracy:.4f}")
 
     with open("UNet/results/results_fold_{}.txt".format(FOLD), "w") as f:
         f.write(json.dumps(metrics))
