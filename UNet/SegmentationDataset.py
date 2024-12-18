@@ -51,6 +51,7 @@ class CocoMaskDataset(datasets.CocoDetection):
             bboxes.append(bbox)
 
         bin_mask = torch.from_numpy(bin_mask).float()
+        bin_mask /= bin_mask.max()
         bboxes = torch.tensor(bboxes, dtype=torch.float32)
         
         return img, bin_mask
